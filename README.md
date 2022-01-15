@@ -40,14 +40,12 @@ import stomp from 'k6/x/stomp';
 export default function () {
     // connect to broker
     const client = new stomp.Client({
-        protocol: 'tcp',
         addr: 'localhost:61613',
         timeout: '2s',
-        tls: false,
     });
 
-    // send a message to '/my/destination' with application/json as MIME content-type
-    client.send('my/destination', 'application/json', '{"test": "123"}');
+    // send a message to '/my/destination' with text/plain as MIME content-type
+    client.send('my/destination', 'text/plain', 'Hello xk6-stomp!');
 
     // subscribe to receive messages fom 'my/destination' with the client ack mode
     const subscription = client.subscribe('my/destination', 'client'); // client-individual or auto (default)

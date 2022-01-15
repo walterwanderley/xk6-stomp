@@ -11,6 +11,7 @@ import (
 	"go.k6.io/k6/js/common"
 )
 
+// Message is a decorator to add string and json methods
 type Message struct {
 	*stomp.Message
 	ctx           context.Context
