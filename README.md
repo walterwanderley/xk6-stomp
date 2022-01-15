@@ -56,7 +56,7 @@ export default function () {
     const msg = subscription.read();
 
     // show the message
-    console.log('msg', msg.json());
+    console.log('msg', msg.string());
     
     // ack the message
     client.ack(msg);
