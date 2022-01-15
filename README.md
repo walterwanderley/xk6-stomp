@@ -87,7 +87,7 @@ $ ./k6 run test.js
   scenarios: (100.00%) 1 scenario, 1 max VUs, 10m30s max duration (incl. graceful stop):
            * default: 1 iterations for each of 1 VUs (maxDuration: 10m0s, gracefulStop: 30s)
 
-INFO[0000] msg {"test": "123"}                           source=console
+INFO[0000] msg Hello xk6-stomp!                          source=console
 
 running (00m00.4s), 0/1 VUs, 1 complete and 0 interrupted iterations
 default ✓ [======================================] 1 VUs  00m00.4s/10m0s  1/1 iters, 1 per VU
