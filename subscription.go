@@ -1,9 +1,14 @@
 package stomp
 
-import "github.com/go-stomp/stomp/v3"
+import (
+	"context"
+
+	"github.com/go-stomp/stomp/v3"
+)
 
 type Subscription struct {
 	*stomp.Subscription
+	ctx context.Context
 }
 
 func (s *Subscription) Read() (*Message, error) {
@@ -11,5 +16,5 @@ func (s *Subscription) Read() (*Message, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Message{Message: msg}, nil
+	return &Message{Message: msg, ctx: s.ctx}, nil
 }

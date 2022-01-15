@@ -38,6 +38,7 @@ type Options struct {
 // Client is the Stomp conn wrapper.
 type Client struct {
 	conn *stomp.Conn
+	ctx  context.Context
 }
 
 // XClient represents the Client constructor (i.e. `new stomp.Client()`) and
@@ -74,7 +75,7 @@ func (s *Stomp) XClient(ctxPtr *context.Context, opts *Options) interface{} {
 	}
 
 	rt := common.GetRuntime(*ctxPtr)
-	return common.Bind(rt, &Client{conn: stompConn}, ctxPtr)
+	return common.Bind(rt, &Client{conn: stompConn, ctx: *ctxPtr}, ctxPtr)
 }
 
 // Disconnect will disconnect from the STOMP server.
@@ -104,7 +105,7 @@ func (c *Client) Subscribe(destination string, ackMode string) (*Subscription, e
 	if err != nil {
 		return nil, err
 	}
-	return &Subscription{sub}, nil
+	return &Subscription{sub, c.ctx}, nil
 }
 
 func (c *Client) Ack(m *Message) error {
