@@ -1,7 +1,7 @@
 # xk6-stomp
 
-This is a [Stomp protocol](https://stomp.github.io/) client library for [k6](https://github.com/k6io/k6),
-implemented as an extension using the [xk6](https://github.com/k6io/xk6) system.
+This is a [Stomp protocol](https://stomp.github.io/) client library for [k6](https://k6.io),
+implemented as an extension using the [xk6](https://github.com/grafana/xk6) system.
 
 
 ## Build
@@ -37,13 +37,13 @@ docker run -p 8161:8161 -p 61613:61613 rmohr/activemq
 // test.js
 import stomp from 'k6/x/stomp';
 
-export default function () {
-    // connect to broker
-    const client = new stomp.Client({
-        addr: 'localhost:61613',
-        timeout: '2s',
-    });
+// connect to broker
+const client = new stomp.Client({
+    addr: 'localhost:61613',
+    timeout: '2s',
+});
 
+export default function () {
     // send a message to '/my/destination' with text/plain as MIME content-type
     client.send('my/destination', 'text/plain', 'Hello xk6-stomp!');
 
@@ -53,7 +53,7 @@ export default function () {
     // read the message
     const msg = subscription.read();
 
-    // show the message
+    // show the message as a string
     console.log('msg', msg.string());
     
     // ack the message
@@ -61,7 +61,9 @@ export default function () {
     
     // unsubscribe from destination
     subscription.unsubscribe();
-    
+}
+
+export function teardown() {
     // disconnect from broker
     client.disconnect();
 }
