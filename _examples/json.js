@@ -13,7 +13,7 @@ export default function () {
     } 
 
     // send a message to '/my/destination' with application/json as MIME content-type
-    client.send('my/destination', 'text/plain', JSON.stringify(payload));
+    client.send('my/destination', 'application/json', JSON.stringify(payload));
 
     // subscribe to receive messages fom 'my/destination' with the client ack mode
     const subscription = client.subscribe('my/destination', 'client'); // client-individual or auto (default)
