@@ -13,6 +13,7 @@ import (
 
 	"go.k6.io/k6/js/common"
 	"go.k6.io/k6/js/modules"
+	"go.k6.io/k6/stats"
 )
 
 // Register the extension on module initialization, available to
@@ -134,7 +135,18 @@ func (c *Client) Disconnect() error {
 }
 
 // Send sends a message to the STOMP server.
-func (c *Client) Send(ctx context.Context, destination, contentType string, body []byte, opts *SendOptions) error {
+func (c *Client) Send(ctx context.Context, destination, contentType string, body []byte, opts *SendOptions) (err error) {
+	startedAt := time.Now()
+	defer func() {
+		now := time.Now()
+		reportStats(ctx, sendMessageTiming, nil, now, stats.D(now.Sub(startedAt)))
+		if err != nil {
+			reportStats(ctx, sendMessageErrors, nil, now, 1)
+		} else {
+			reportStats(ctx, dataSent, nil, now, float64(len(body)))
+			reportStats(ctx, sendMessage, nil, now, 1)
+		}
+	}()
 	if opts == nil {
 		opts = new(SendOptions)
 	}
@@ -145,7 +157,9 @@ func (c *Client) Send(ctx context.Context, destination, contentType string, body
 	for k, v := range opts.Headers {
 		sendOpts = append(sendOpts, stomp.SendOpt.Header(k, v))
 	}
-	return c.conn.Send(destination, contentType, body, sendOpts...)
+
+	err = c.conn.Send(destination, contentType, body, sendOpts...)
+	return
 }
 
 // Subscribe creates a subscription on the STOMP server.
@@ -179,14 +193,28 @@ func (c *Client) Subscribe(ctx context.Context, destination string, opts *Subscr
 }
 
 // Ack acknowledges a message received from the STOMP server.
-func (c *Client) Ack(m *Message) error {
-	return c.conn.Ack(m.Message)
+func (c *Client) Ack(ctx context.Context, m *Message) error {
+	now := time.Now()
+	err := c.conn.Ack(m.Message)
+	if err != nil {
+		reportStats(ctx, ackMessageErrors, nil, now, 1)
+	} else {
+		reportStats(ctx, ackMessage, nil, now, 1)
+	}
+	return err
 }
 
 // Nack indicates to the server that a message was not received
 // by the client.
-func (c *Client) Nack(m *Message) error {
-	return c.conn.Nack(m.Message)
+func (c *Client) Nack(ctx context.Context, m *Message) error {
+	now := time.Now()
+	err := c.conn.Nack(m.Message)
+	if err != nil {
+		reportStats(ctx, nackMessageErrors, nil, now, 1)
+	} else {
+		reportStats(ctx, nackMessage, nil, now, 1)
+	}
+	return err
 }
 
 // Server returns the STOMP server identification.
@@ -200,12 +228,12 @@ func (c *Client) Session() string {
 }
 
 // Begin is used to start a transaction.
-func (c *Client) Begin() *Transaction {
-	return &Transaction{c.conn.Begin()}
+func (c *Client) Begin(ctx context.Context) *Transaction {
+	return &Transaction{Transaction: c.conn.Begin(), ctx: ctx}
 }
 
 // BeginWithError is used to start a transaction, but also returns the error.
-func (c *Client) BeginWithError() (*Transaction, error) {
+func (c *Client) BeginWithError(ctx context.Context) (*Transaction, error) {
 	tx, err := c.conn.BeginWithError()
-	return &Transaction{tx}, err
+	return &Transaction{Transaction: tx, ctx: ctx}, err
 }
