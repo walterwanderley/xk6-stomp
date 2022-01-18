@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-stomp/stomp/v3"
+	"github.com/go-stomp/stomp/v3/frame"
 
 	"go.k6.io/k6/js/common"
 	"go.k6.io/k6/js/modules"
@@ -48,11 +49,18 @@ type Client struct {
 	ctx  context.Context
 }
 
+type SendOptions struct {
+	Headers map[string]string
+	Receipt bool
+}
+
 // Listener is a callback function to execute when the subscription reads a message
 type Listener func(*Message)
 
 type SubscribeOptions struct {
 	Ack      string
+	Headers  map[string]string
+	Id       string
 	Listener Listener
 }
 
@@ -127,8 +135,18 @@ func (c *Client) Disconnect() error {
 }
 
 // Send sends a message to the STOMP server.
-func (c *Client) Send(destination, contentType string, body []byte) error {
-	return c.conn.Send(destination, contentType, body)
+func (c *Client) Send(destination, contentType string, body []byte, opts *SendOptions) error {
+	if opts == nil {
+		opts = new(SendOptions)
+	}
+	var sendOpts []func(*frame.Frame) error
+	if opts.Receipt {
+		sendOpts = append(sendOpts, stomp.SendOpt.Receipt)
+	}
+	for k, v := range opts.Headers {
+		sendOpts = append(sendOpts, stomp.SendOpt.Header(k, v))
+	}
+	return c.conn.Send(destination, contentType, body, sendOpts...)
 }
 
 // Subscribe creates a subscription on the STOMP server.
@@ -147,7 +165,14 @@ func (c *Client) Subscribe(destination string, opts *SubscribeOptions) (*Subscri
 	default:
 		return nil, fmt.Errorf("ackMode should be 'auto', 'client' or 'client-individual'")
 	}
-	sub, err := c.conn.Subscribe(destination, mode)
+	var subOpts []func(*frame.Frame) error
+	for k, v := range opts.Headers {
+		subOpts = append(subOpts, stomp.SubscribeOpt.Header(k, v))
+	}
+	if opts.Id != "" {
+		subOpts = append(subOpts, stomp.SubscribeOpt.Id(opts.Id))
+	}
+	sub, err := c.conn.Subscribe(destination, mode, subOpts...)
 	if err != nil {
 		return nil, err
 	}
