@@ -18,7 +18,7 @@ export default function () {
             client.ack(msg);
         }
     }
-    // subscribe to receive messages fom 'my/destination' with the client ack mode
+    // subscribe to receive messages from 'my/destination' with the client ack mode
     const subscription = client.subscribe('my/destination', subscribeOpts)
 
     sleep(1);
