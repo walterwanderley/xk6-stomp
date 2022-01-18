@@ -11,7 +11,7 @@ type Subscription struct {
 	ctx context.Context
 }
 
-func NewSubscription(sc *stomp.Subscription, ctx context.Context, listener Listener) *Subscription {
+func NewSubscription(ctx context.Context, sc *stomp.Subscription, listener Listener) *Subscription {
 	var s Subscription
 	s.Subscription = sc
 	s.ctx = ctx

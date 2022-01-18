@@ -46,7 +46,6 @@ type Options struct {
 // Client is the Stomp conn wrapper.
 type Client struct {
 	conn *stomp.Conn
-	ctx  context.Context
 }
 
 type SendOptions struct {
@@ -126,7 +125,7 @@ func (s *Stomp) XClient(ctxPtr *context.Context, opts *Options) interface{} {
 		return err
 	}
 
-	return common.Bind(rt, &Client{conn: stompConn, ctx: *ctxPtr}, ctxPtr)
+	return common.Bind(rt, &Client{conn: stompConn}, ctxPtr)
 }
 
 // Disconnect will disconnect from the STOMP server.
@@ -135,7 +134,7 @@ func (c *Client) Disconnect() error {
 }
 
 // Send sends a message to the STOMP server.
-func (c *Client) Send(destination, contentType string, body []byte, opts *SendOptions) error {
+func (c *Client) Send(ctx context.Context, destination, contentType string, body []byte, opts *SendOptions) error {
 	if opts == nil {
 		opts = new(SendOptions)
 	}
@@ -150,7 +149,7 @@ func (c *Client) Send(destination, contentType string, body []byte, opts *SendOp
 }
 
 // Subscribe creates a subscription on the STOMP server.
-func (c *Client) Subscribe(destination string, opts *SubscribeOptions) (*Subscription, error) {
+func (c *Client) Subscribe(ctx context.Context, destination string, opts *SubscribeOptions) (*Subscription, error) {
 	if opts == nil {
 		opts = new(SubscribeOptions)
 	}
@@ -176,7 +175,7 @@ func (c *Client) Subscribe(destination string, opts *SubscribeOptions) (*Subscri
 	if err != nil {
 		return nil, err
 	}
-	return NewSubscription(sub, c.ctx, opts.Listener), nil
+	return NewSubscription(ctx, sub, opts.Listener), nil
 }
 
 // Ack acknowledges a message received from the STOMP server.
