@@ -48,6 +48,14 @@ type Client struct {
 	ctx  context.Context
 }
 
+// Listener is a callback function to execute when the subscription reads a message
+type Listener func(*Message)
+
+type SubscribeOptions struct {
+	Ack      string
+	Listener Listener
+}
+
 // XClient represents the Client constructor (i.e. `new stomp.Client()`) and
 // returns a new Stomp client object.
 func (s *Stomp) XClient(ctxPtr *context.Context, opts *Options) interface{} {
@@ -124,9 +132,12 @@ func (c *Client) Send(destination, contentType string, body []byte) error {
 }
 
 // Subscribe creates a subscription on the STOMP server.
-func (c *Client) Subscribe(destination string, ackMode string) (*Subscription, error) {
+func (c *Client) Subscribe(destination string, opts *SubscribeOptions) (*Subscription, error) {
+	if opts == nil {
+		opts = new(SubscribeOptions)
+	}
 	var mode stomp.AckMode
-	switch ackMode {
+	switch opts.Ack {
 	case "client":
 		mode = stomp.AckClient
 	case "client-individual":
@@ -140,7 +151,7 @@ func (c *Client) Subscribe(destination string, ackMode string) (*Subscription, e
 	if err != nil {
 		return nil, err
 	}
-	return &Subscription{sub, c.ctx}, nil
+	return NewSubscription(sub, c.ctx, opts.Listener), nil
 }
 
 // Ack acknowledges a message received from the STOMP server.

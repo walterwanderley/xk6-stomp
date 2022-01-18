@@ -20,8 +20,11 @@ export default function () {
     // send a message to '/my/destination' with text/plain as MIME content-type
     client.send('my/destination', 'text/plain', 'Hello with conn params!');
 
+    const subscribeOpts = {
+        ack: 'client' // client-individual or auto (default)
+    }
     // subscribe to receive messages fom 'my/destination' with the client ack mode
-    const subscription = client.subscribe('my/destination', 'client'); // client-individual or auto (default)
+    const subscription = client.subscribe('my/destination', subscribeOpts); 
 
     // read the message
     const msg = subscription.read();
