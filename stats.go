@@ -2,7 +2,7 @@ package stomp
 
 import (
 	"context"
-	"fmt"
+	"log"
 	"time"
 
 	"go.k6.io/k6/lib"
@@ -14,25 +14,25 @@ var (
 	dataSent     = stats.New(metrics.DataSentName, stats.Counter, stats.Data)
 	dataReceived = stats.New(metrics.DataReceivedName, stats.Counter, stats.Data)
 
-	sendMessage       = stats.New("stomp.send.count", stats.Counter)
-	sendMessageTiming = stats.New("stomp.send.time", stats.Trend, stats.Time)
-	sendMessageErrors = stats.New("stomp.send.error.count", stats.Counter)
+	sendMessage       = stats.New("stomp_send_count", stats.Counter)
+	sendMessageTiming = stats.New("stomp_send_time", stats.Trend, stats.Time)
+	sendMessageErrors = stats.New("stomp_send_error_count", stats.Counter)
 
-	readMessage       = stats.New("stomp.read.count", stats.Counter)
-	readMessageTiming = stats.New("stomp.read.time", stats.Trend, stats.Time)
-	readMessageErrors = stats.New("stomp.read.error.count", stats.Counter)
+	readMessage       = stats.New("stomp_read_count", stats.Counter)
+	readMessageTiming = stats.New("stomp_read_time", stats.Trend, stats.Time)
+	readMessageErrors = stats.New("stomp._read_error_count", stats.Counter)
 
-	ackMessage       = stats.New("stomp.ack.count", stats.Counter)
-	ackMessageErrors = stats.New("stomp.ack.error.count", stats.Counter)
+	ackMessage       = stats.New("stomp_ack_count", stats.Counter)
+	ackMessageErrors = stats.New("stomp_ack_error_count", stats.Counter)
 
-	nackMessage       = stats.New("stomp.nack.count", stats.Counter)
-	nackMessageErrors = stats.New("stomp.nack.error.count", stats.Counter)
+	nackMessage       = stats.New("stomp_nack_count", stats.Counter)
+	nackMessageErrors = stats.New("stomp_nack_error_count", stats.Counter)
 )
 
 func reportStats(ctx context.Context, metric *stats.Metric, tags map[string]string, now time.Time, value float64) {
 	state := lib.GetState(ctx)
 	if state == nil {
-		fmt.Println("cann't get state")
+		log.Println("cann't get state")
 		return
 	}
 

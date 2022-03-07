@@ -33,6 +33,7 @@ const (
 type Options struct {
 	Addr     string
 	Protocol string
+	Path     string
 	Timeout  string
 	TLS      bool
 	Headers  map[string]string
@@ -75,26 +76,11 @@ func (s *Stomp) XClient(ctxPtr *context.Context, opts *Options) interface{} {
 	if opts.Timeout == "" {
 		opts.Timeout = defaultTimeout
 	}
-	timeout, err := time.ParseDuration(opts.Timeout)
+
+	netConn, err := openNetConn(opts)
 	if err != nil {
 		common.Throw(rt, err)
 		return err
-	}
-
-	var netConn io.ReadWriteCloser
-	if opts.TLS {
-		netConn, err = tls.DialWithDialer(&net.Dialer{Timeout: timeout},
-			opts.Protocol, opts.Addr, nil)
-		if err != nil {
-			common.Throw(rt, err)
-			return err
-		}
-	} else {
-		netConn, err = net.DialTimeout(opts.Protocol, opts.Addr, timeout)
-		if err != nil {
-			common.Throw(rt, err)
-			return err
-		}
 	}
 	connOpts := make([]func(*stomp.Conn) error, 0)
 	if opts.User != "" || opts.Pass != "" {
@@ -127,6 +113,22 @@ func (s *Stomp) XClient(ctxPtr *context.Context, opts *Options) interface{} {
 	}
 
 	return common.Bind(rt, &Client{conn: stompConn}, ctxPtr)
+}
+
+func openNetConn(opts *Options) (io.ReadWriteCloser, error) {
+	timeout, err := time.ParseDuration(opts.Timeout)
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case opts.Protocol == "ws" || opts.Protocol == "wss":
+		return openWSConn(opts, timeout)
+	case opts.TLS:
+		return tls.DialWithDialer(&net.Dialer{Timeout: timeout},
+			opts.Protocol, opts.Addr, nil)
+	default:
+		return net.DialTimeout(opts.Protocol, opts.Addr, timeout)
+	}
 }
 
 // Disconnect will disconnect from the STOMP server.
