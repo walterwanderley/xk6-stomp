@@ -13,7 +13,9 @@ const client = new stomp.Client({
     user: 'scott',
     pass: 'tiger',
     messageSendTimeout: '10s',
-    receiptTimeout: '5s'
+    receiptTimeout: '5s',
+    heartBeatSendTimeout: '30s',
+    HeartBeatReceiveTimeout: '30s'
 });
 
 export default function () {
