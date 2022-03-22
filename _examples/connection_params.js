@@ -15,7 +15,7 @@ const client = new stomp.Client({
     messageSendTimeout: '10s',
     receiptTimeout: '5s',
     heartBeatSendTimeout: '30s',
-    HeartBeatReceiveTimeout: '30s'
+    heartBeatReceiveTimeout: '30s'
 });
 
 export default function () {
