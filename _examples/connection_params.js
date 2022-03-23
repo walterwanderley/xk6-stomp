@@ -12,10 +12,12 @@ const client = new stomp.Client({
     },
     user: 'scott',
     pass: 'tiger',
-    messageSendTimeout: '10s',
-    receiptTimeout: '5s',
-    heartBeatSendTimeout: '30s',
-    heartBeatReceiveTimeout: '30s'
+    heartbeat: {
+        incoming: '30s',
+        outcoming: '30s',
+    },
+    message_send_timeout: '5s',
+    receipt_timeout: '10s'
 });
 
 export default function () {

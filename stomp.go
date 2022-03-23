@@ -44,8 +44,10 @@ type Options struct {
 	MessageSendTimeout string
 	ReceiptTimeout     string
 
-	HeartBeatSendTimeout    string
-	HeartBeatReceiveTimeout string
+	Heartbeat struct {
+		Incoming  string
+		Outcoming string
+	}
 }
 
 // Client is the Stomp conn wrapper.
@@ -108,13 +110,13 @@ func (s *Stomp) XClient(ctxPtr *context.Context, opts *Options) interface{} {
 		}
 		connOpts = append(connOpts, stomp.ConnOpt.RcvReceiptTimeout(timeout))
 	}
-	if opts.HeartBeatSendTimeout != "" && opts.HeartBeatReceiveTimeout != "" {
-		sendTimeout, err := time.ParseDuration(opts.HeartBeatSendTimeout)
+	if opts.Heartbeat.Incoming != "" && opts.Heartbeat.Outcoming != "" {
+		sendTimeout, err := time.ParseDuration(opts.Heartbeat.Outcoming)
 		if err != nil {
 			common.Throw(rt, err)
 			return err
 		}
-		receiveTimeout, err := time.ParseDuration(opts.HeartBeatReceiveTimeout)
+		receiveTimeout, err := time.ParseDuration(opts.Heartbeat.Incoming)
 		if err != nil {
 			common.Throw(rt, err)
 			return err

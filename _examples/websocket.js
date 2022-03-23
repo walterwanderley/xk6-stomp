@@ -5,9 +5,15 @@ export default function () {
     // connect to broker
     const client = new stomp.Client({
         protocol: 'ws', // stomp over websocket (using this server: https://github.com/spring-guides/gs-messaging-stomp-websocket/)
-        addr: 'localhost:8080',
+        addr: 'localhost:9999',
         path: '/gs-guide-websocket/websocket',
         timeout: '2s',
+        heartbeat: {
+            incoming: '30s',
+            outcoming: '30s',
+        },
+        message_send_timeout: '5s',
+        receipt_timeout: '10s'
     });
 
     // subscribe to receive messages from '/topic/greetings' with auto ack
