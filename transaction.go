@@ -1,29 +1,29 @@
 package stomp
 
 import (
-	"context"
 	"time"
 
 	"github.com/go-stomp/stomp/v3"
 	"github.com/go-stomp/stomp/v3/frame"
+	"go.k6.io/k6/js/modules"
 	"go.k6.io/k6/stats"
 )
 
 type Transaction struct {
 	*stomp.Transaction
-	ctx context.Context
+	vu modules.VU
 }
 
 func (tx *Transaction) Send(destination, contentType string, body []byte, opts *SendOptions) (err error) {
 	startedAt := time.Now()
 	defer func() {
 		now := time.Now()
-		reportStats(tx.ctx, sendMessageTiming, nil, now, stats.D(now.Sub(startedAt)))
+		reportStats(tx.vu, sendMessageTiming, nil, now, stats.D(now.Sub(startedAt)))
 		if err != nil {
-			reportStats(tx.ctx, sendMessageErrors, nil, now, 1)
+			reportStats(tx.vu, sendMessageErrors, nil, now, 1)
 		} else {
-			reportStats(tx.ctx, dataSent, nil, now, float64(len(body)))
-			reportStats(tx.ctx, sendMessage, nil, now, 1)
+			reportStats(tx.vu, dataSent, nil, now, float64(len(body)))
+			reportStats(tx.vu, sendMessage, nil, now, 1)
 		}
 	}()
 	if opts == nil {
@@ -40,24 +40,36 @@ func (tx *Transaction) Send(destination, contentType string, body []byte, opts *
 	return
 }
 
-func (tx *Transaction) Ack(msg *Message) error {
+func (tx *Transaction) Ack(m *Message) error {
 	now := time.Now()
-	err := tx.Transaction.Ack(msg.Message)
+	if m.Header.Get(frame.Id) == "" {
+		m.Header.Set(frame.Id, m.Header.Get(frame.Ack))
+	}
+	if m.Header.Get(frame.MessageId) == "" {
+		m.Header.Set(frame.MessageId, m.Header.Get(frame.Ack))
+	}
+	err := tx.Transaction.Ack(m.Message)
 	if err != nil {
-		reportStats(tx.ctx, ackMessageErrors, nil, now, 1)
+		reportStats(tx.vu, ackMessageErrors, nil, now, 1)
 	} else {
-		reportStats(tx.ctx, ackMessage, nil, now, 1)
+		reportStats(tx.vu, ackMessage, nil, now, 1)
 	}
 	return err
 }
 
-func (tx *Transaction) Nack(msg *Message) error {
+func (tx *Transaction) Nack(m *Message) error {
 	now := time.Now()
-	err := tx.Transaction.Nack(msg.Message)
+	if m.Header.Get(frame.Id) == "" {
+		m.Header.Set(frame.Id, m.Header.Get(frame.Ack))
+	}
+	if m.Header.Get(frame.MessageId) == "" {
+		m.Header.Set(frame.MessageId, m.Header.Get(frame.Ack))
+	}
+	err := tx.Transaction.Nack(m.Message)
 	if err != nil {
-		reportStats(tx.ctx, nackMessageErrors, nil, now, 1)
+		reportStats(tx.vu, nackMessageErrors, nil, now, 1)
 	} else {
-		reportStats(tx.ctx, nackMessage, nil, now, 1)
+		reportStats(tx.vu, nackMessage, nil, now, 1)
 	}
 	return err
 }

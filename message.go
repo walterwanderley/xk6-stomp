@@ -1,7 +1,6 @@
 package stomp
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 
@@ -9,12 +8,13 @@ import (
 	"github.com/go-stomp/stomp/v3"
 	"github.com/tidwall/gjson"
 	"go.k6.io/k6/js/common"
+	"go.k6.io/k6/js/modules"
 )
 
 // Message is a decorator to add string and json methods
 type Message struct {
 	*stomp.Message
-	ctx           context.Context
+	vu            modules.VU
 	cachedJSON    interface{}
 	validatedJSON bool
 }
@@ -24,7 +24,7 @@ func (m *Message) String() string {
 }
 
 func (m *Message) JSON(selector ...string) goja.Value {
-	rt := common.GetRuntime(m.ctx)
+	rt := m.vu.Runtime()
 
 	if m.Body == nil {
 		err := fmt.Errorf("the body is null so we can't transform it to JSON")

@@ -1,7 +1,7 @@
 import stomp from 'k6/x/stomp';
 
 // connect to broker
-const client = new stomp.Client({
+const client = stomp.connect({
     protocol: 'tcp',
     addr: 'localhost:61613',
     timeout: '15s',
@@ -14,10 +14,11 @@ const client = new stomp.Client({
     pass: 'tiger',
     heartbeat: {
         incoming: '30s',
-        outcoming: '30s',
+        outgoing: '30s',
     },
     message_send_timeout: '5s',
-    receipt_timeout: '10s'
+    receipt_timeout: '10s',
+    verbose: true
 });
 
 export default function () {

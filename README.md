@@ -38,7 +38,7 @@ docker run -p 8161:8161 -p 61613:61613 rmohr/activemq
 import stomp from 'k6/x/stomp';
 
 // connect to broker
-const client = new stomp.Client({
+const client = stomp.connect({
     addr: 'localhost:61613',
     timeout: '2s',
 });
@@ -53,7 +53,7 @@ export default function () {
     // subscribe to receive messages from 'my/destination' with the client ack mode
     const subscription = client.subscribe('my/destination', subscribeOpts); 
 
-    // read the message (see '_examples/callback.js' for a callback example)
+    // read the message
     const msg = subscription.read();
 
     // show the message as a string
@@ -75,16 +75,16 @@ export function teardown() {
 3. Result output:
 
 ```shell
-$ ./k6 run test.js
+$ ./k6 run _examples/test.js 
 
-          /\      |‾‾| /‾‾/   /‾‾/
-     /\  /  \     |  |/  /   /  /
-    /  \/    \    |     (   /   ‾‾\
-   /          \   |  |\  \ |  (‾)  |
+          /\      |‾‾| /‾‾/   /‾‾/   
+     /\  /  \     |  |/  /   /  /    
+    /  \/    \    |     (   /   ‾‾\  
+   /          \   |  |\  \ |  (‾)  | 
   / __________ \  |__| \__\ \_____/ .io
 
   execution: local
-     script: test.js
+     script: _examples/test.js
      output: -
 
   scenarios: (100.00%) 1 scenario, 1 max VUs, 10m30s max duration (incl. graceful stop):
@@ -92,6 +92,18 @@ $ ./k6 run test.js
 
 INFO[0000] msg Hello xk6-stomp!                          source=console
 
-running (00m00.4s), 0/1 VUs, 1 complete and 0 interrupted iterations
-default ✓ [======================================] 1 VUs  00m00.4s/10m0s  1/1 iters, 1 per VU
+running (00m00.0s), 0/1 VUs, 1 complete and 0 interrupted iterations
+default ✓ [======================================] 1 VUs  00m00.0s/10m0s  1/1 iters, 1 per VU
+
+     █ teardown
+
+     data_received........: 16 B 375 B/s
+     data_sent............: 16 B 375 B/s
+     iteration_duration...: avg=3.94ms min=1.98ms med=3.94ms max=5.91ms p(90)=5.52ms p(95)=5.72ms
+     iterations...........: 1    23.410925/s
+     stomp_ack_count......: 1    23.410925/s
+     stomp_read_count.....: 1    23.410925/s
+     stomp_read_time......: avg=2.89ms min=2.89ms med=2.89ms max=2.89ms p(90)=2.89ms p(95)=2.89ms
+     stomp_send_count.....: 1    23.410925/s
+     stomp_send_time......: avg=3.6µs  min=3.6µs  med=3.6µs  max=3.6µs  p(90)=3.6µs  p(95)=3.6µs
 ```

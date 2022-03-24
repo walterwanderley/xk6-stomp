@@ -3,14 +3,14 @@ import stomp from 'k6/x/stomp';
 export default function () {
 
     // connect to broker
-    const client = new stomp.Client({
+    const client = stomp.connect({
         protocol: 'ws', // stomp over websocket (using this server: https://github.com/spring-guides/gs-messaging-stomp-websocket/)
-        addr: 'localhost:9999',
+        addr: 'localhost:8080',
         path: '/gs-guide-websocket/websocket',
         timeout: '2s',
         heartbeat: {
             incoming: '30s',
-            outcoming: '30s',
+            outgoing: '30s',
         },
         message_send_timeout: '5s',
         receipt_timeout: '10s'

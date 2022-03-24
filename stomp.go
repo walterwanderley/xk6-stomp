@@ -19,15 +19,22 @@ import (
 // Register the extension on module initialization, available to
 // import from JS as "k6/x/stomp".
 func init() {
-	modules.Register("k6/x/stomp", new(Stomp))
+	modules.Register("k6/x/stomp", New())
 }
-
-// Stomp is the k6 extension for a Stomp client.
-type Stomp struct{}
 
 const (
 	defaultProtocol = "tcp"
 	defaultTimeout  = "10s"
+)
+
+type (
+	RootModule struct{}
+
+	// Stomp is the k6 extension for a Stomp client.
+	Stomp struct {
+		vu modules.VU
+		*Client
+	}
 )
 
 type Options struct {
@@ -45,14 +52,17 @@ type Options struct {
 	ReceiptTimeout     string
 
 	Heartbeat struct {
-		Incoming  string
-		Outcoming string
+		Incoming string
+		Outgoing string
 	}
+
+	Verbose bool
 }
 
 // Client is the Stomp conn wrapper.
 type Client struct {
 	conn *stomp.Conn
+	vu   modules.VU
 }
 
 type SendOptions struct {
@@ -70,10 +80,24 @@ type SubscribeOptions struct {
 	Listener Listener
 }
 
-// XClient represents the Client constructor (i.e. `new stomp.Client()`) and
-// returns a new Stomp client object.
-func (s *Stomp) XClient(ctxPtr *context.Context, opts *Options) interface{} {
-	rt := common.GetRuntime(*ctxPtr)
+func New() *RootModule {
+	return &RootModule{}
+}
+
+func (*RootModule) NewModuleInstance(vu modules.VU) modules.Instance {
+	return &Stomp{vu: vu, Client: &Client{vu: vu}}
+}
+
+func (s *Stomp) Exports() modules.Exports {
+	return modules.Exports{Default: s.Client}
+}
+
+// Connect to a stomp server
+func (c *Client) Connect(opts *Options) *Client {
+	if c.conn != nil {
+		return c
+	}
+	rt := c.vu.Runtime()
 
 	if opts.Protocol == "" {
 		opts.Protocol = defaultProtocol
@@ -85,7 +109,7 @@ func (s *Stomp) XClient(ctxPtr *context.Context, opts *Options) interface{} {
 	netConn, err := openNetConn(opts)
 	if err != nil {
 		common.Throw(rt, err)
-		return err
+		return nil
 	}
 	connOpts := make([]func(*stomp.Conn) error, 0)
 	if opts.User != "" || opts.Pass != "" {
@@ -98,7 +122,7 @@ func (s *Stomp) XClient(ctxPtr *context.Context, opts *Options) interface{} {
 		timeout, err := time.ParseDuration(opts.MessageSendTimeout)
 		if err != nil {
 			common.Throw(rt, err)
-			return err
+			return nil
 		}
 		connOpts = append(connOpts, stomp.ConnOpt.MsgSendTimeout(timeout))
 	}
@@ -106,31 +130,36 @@ func (s *Stomp) XClient(ctxPtr *context.Context, opts *Options) interface{} {
 		timeout, err := time.ParseDuration(opts.ReceiptTimeout)
 		if err != nil {
 			common.Throw(rt, err)
-			return err
+			return nil
 		}
 		connOpts = append(connOpts, stomp.ConnOpt.RcvReceiptTimeout(timeout))
 	}
-	if opts.Heartbeat.Incoming != "" && opts.Heartbeat.Outcoming != "" {
-		sendTimeout, err := time.ParseDuration(opts.Heartbeat.Outcoming)
-		if err != nil {
-			common.Throw(rt, err)
-			return err
+	if opts.Heartbeat.Incoming != "" || opts.Heartbeat.Outgoing != "" {
+		sendTimeout, receiveTimeout := time.Minute, time.Minute
+		if opts.Heartbeat.Outgoing != "" {
+			sendTimeout, err = time.ParseDuration(opts.Heartbeat.Outgoing)
+			if err != nil {
+				common.Throw(rt, err)
+				return nil
+			}
 		}
-		receiveTimeout, err := time.ParseDuration(opts.Heartbeat.Incoming)
-		if err != nil {
-			common.Throw(rt, err)
-			return err
+		if opts.Heartbeat.Incoming != "" {
+			receiveTimeout, err = time.ParseDuration(opts.Heartbeat.Incoming)
+			if err != nil {
+				common.Throw(rt, err)
+				return nil
+			}
 		}
 		connOpts = append(connOpts, stomp.ConnOpt.HeartBeat(sendTimeout, receiveTimeout))
 	}
 
-	stompConn, err := stomp.Connect(netConn, connOpts...)
+	c.conn, err = stomp.Connect(netConn, connOpts...)
 	if err != nil {
 		common.Throw(rt, err)
-		return err
+		return nil
 	}
 
-	return common.Bind(rt, &Client{conn: stompConn}, ctxPtr)
+	return c
 }
 
 func openNetConn(opts *Options) (io.ReadWriteCloser, error) {
@@ -138,15 +167,20 @@ func openNetConn(opts *Options) (io.ReadWriteCloser, error) {
 	if err != nil {
 		return nil, err
 	}
+	var rwc io.ReadWriteCloser
 	switch {
 	case opts.Protocol == "ws" || opts.Protocol == "wss":
-		return openWSConn(opts, timeout)
+		rwc, err = openWSConn(opts, timeout)
 	case opts.TLS:
-		return tls.DialWithDialer(&net.Dialer{Timeout: timeout},
+		rwc, err = tls.DialWithDialer(&net.Dialer{Timeout: timeout},
 			opts.Protocol, opts.Addr, nil)
 	default:
-		return net.DialTimeout(opts.Protocol, opts.Addr, timeout)
+		rwc, err = net.DialTimeout(opts.Protocol, opts.Addr, timeout)
 	}
+	if opts.Verbose {
+		return &VerboseReadWriteClose{rwc}, err
+	}
+	return rwc, err
 }
 
 // Disconnect will disconnect from the STOMP server.
@@ -155,16 +189,16 @@ func (c *Client) Disconnect() error {
 }
 
 // Send sends a message to the STOMP server.
-func (c *Client) Send(ctx context.Context, destination, contentType string, body []byte, opts *SendOptions) (err error) {
+func (c *Client) Send(destination, contentType string, body []byte, opts *SendOptions) (err error) {
 	startedAt := time.Now()
 	defer func() {
 		now := time.Now()
-		reportStats(ctx, sendMessageTiming, nil, now, stats.D(now.Sub(startedAt)))
+		reportStats(c.vu, sendMessageTiming, nil, now, stats.D(now.Sub(startedAt)))
 		if err != nil {
-			reportStats(ctx, sendMessageErrors, nil, now, 1)
+			reportStats(c.vu, sendMessageErrors, nil, now, 1)
 		} else {
-			reportStats(ctx, dataSent, nil, now, float64(len(body)))
-			reportStats(ctx, sendMessage, nil, now, 1)
+			reportStats(c.vu, dataSent, nil, now, float64(len(body)))
+			reportStats(c.vu, sendMessage, nil, now, 1)
 		}
 	}()
 	if opts == nil {
@@ -183,7 +217,7 @@ func (c *Client) Send(ctx context.Context, destination, contentType string, body
 }
 
 // Subscribe creates a subscription on the STOMP server.
-func (c *Client) Subscribe(ctx context.Context, destination string, opts *SubscribeOptions) (*Subscription, error) {
+func (c *Client) Subscribe(destination string, opts *SubscribeOptions) (*Subscription, error) {
 	if opts == nil {
 		opts = new(SubscribeOptions)
 	}
@@ -209,30 +243,42 @@ func (c *Client) Subscribe(ctx context.Context, destination string, opts *Subscr
 	if err != nil {
 		return nil, err
 	}
-	return NewSubscription(ctx, sub, opts.Listener), nil
+	return NewSubscription(c.vu, sub, opts.Listener), nil
 }
 
 // Ack acknowledges a message received from the STOMP server.
-func (c *Client) Ack(ctx context.Context, m *Message) error {
+func (c *Client) Ack(m *Message) error {
 	now := time.Now()
+	if m.Header.Get(frame.Id) == "" {
+		m.Header.Set(frame.Id, m.Header.Get(frame.Ack))
+	}
+	if m.Header.Get(frame.MessageId) == "" {
+		m.Header.Set(frame.MessageId, m.Header.Get(frame.Ack))
+	}
 	err := c.conn.Ack(m.Message)
 	if err != nil {
-		reportStats(ctx, ackMessageErrors, nil, now, 1)
+		reportStats(c.vu, ackMessageErrors, nil, now, 1)
 	} else {
-		reportStats(ctx, ackMessage, nil, now, 1)
+		reportStats(c.vu, ackMessage, nil, now, 1)
 	}
 	return err
 }
 
 // Nack indicates to the server that a message was not received
 // by the client.
-func (c *Client) Nack(ctx context.Context, m *Message) error {
+func (c *Client) Nack(m *Message) error {
 	now := time.Now()
+	if m.Header.Get(frame.Id) == "" {
+		m.Header.Set(frame.Id, m.Header.Get(frame.Ack))
+	}
+	if m.Header.Get(frame.MessageId) == "" {
+		m.Header.Set(frame.MessageId, m.Header.Get(frame.Ack))
+	}
 	err := c.conn.Nack(m.Message)
 	if err != nil {
-		reportStats(ctx, nackMessageErrors, nil, now, 1)
+		reportStats(c.vu, nackMessageErrors, nil, now, 1)
 	} else {
-		reportStats(ctx, nackMessage, nil, now, 1)
+		reportStats(c.vu, nackMessage, nil, now, 1)
 	}
 	return err
 }
@@ -248,12 +294,12 @@ func (c *Client) Session() string {
 }
 
 // Begin is used to start a transaction.
-func (c *Client) Begin(ctx context.Context) *Transaction {
-	return &Transaction{Transaction: c.conn.Begin(), ctx: ctx}
+func (c *Client) Begin() *Transaction {
+	return &Transaction{Transaction: c.conn.Begin(), vu: c.vu}
 }
 
 // BeginWithError is used to start a transaction, but also returns the error.
 func (c *Client) BeginWithError(ctx context.Context) (*Transaction, error) {
 	tx, err := c.conn.BeginWithError()
-	return &Transaction{Transaction: tx, ctx: ctx}, err
+	return &Transaction{Transaction: tx, vu: c.vu}, err
 }

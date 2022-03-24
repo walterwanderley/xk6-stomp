@@ -1,11 +1,10 @@
 package stomp
 
 import (
-	"context"
 	"log"
 	"time"
 
-	"go.k6.io/k6/lib"
+	"go.k6.io/k6/js/modules"
 	"go.k6.io/k6/lib/metrics"
 	"go.k6.io/k6/stats"
 )
@@ -29,14 +28,14 @@ var (
 	nackMessageErrors = stats.New("stomp_nack_error_count", stats.Counter)
 )
 
-func reportStats(ctx context.Context, metric *stats.Metric, tags map[string]string, now time.Time, value float64) {
-	state := lib.GetState(ctx)
+func reportStats(vu modules.VU, metric *stats.Metric, tags map[string]string, now time.Time, value float64) {
+	state := vu.State()
 	if state == nil {
 		log.Println("cann't get state")
 		return
 	}
 
-	stats.PushIfNotDone(ctx, state.Samples, stats.Sample{
+	stats.PushIfNotDone(vu.Context(), state.Samples, stats.Sample{
 		Time:   now,
 		Metric: metric,
 		Tags:   stats.IntoSampleTags(&tags),

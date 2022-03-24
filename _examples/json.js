@@ -1,7 +1,7 @@
 import stomp from 'k6/x/stomp';
 
 // connect to broker
-const client = new stomp.Client({
+const client = stomp.connect({
     addr: 'localhost:61613',
     timeout: '2s'
 });
