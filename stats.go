@@ -1,7 +1,7 @@
 package stomp
 
 import (
-	"log"
+	"io"
 	"time"
 
 	"go.k6.io/k6/js/modules"
@@ -31,7 +31,6 @@ var (
 func reportStats(vu modules.VU, metric *stats.Metric, tags map[string]string, now time.Time, value float64) {
 	state := vu.State()
 	if state == nil {
-		log.Println("cann't get state")
 		return
 	}
 
@@ -41,4 +40,21 @@ func reportStats(vu modules.VU, metric *stats.Metric, tags map[string]string, no
 		Tags:   stats.IntoSampleTags(&tags),
 		Value:  value,
 	})
+}
+
+type StatsReadWriteClose struct {
+	io.ReadWriteCloser
+	vu modules.VU
+}
+
+func (s *StatsReadWriteClose) Read(p []byte) (int, error) {
+	n, err := s.ReadWriteCloser.Read(p)
+	reportStats(s.vu, dataReceived, nil, time.Now(), float64(n))
+	return n, err
+}
+
+func (s *StatsReadWriteClose) Write(p []byte) (int, error) {
+	n, err := s.ReadWriteCloser.Write(p)
+	reportStats(s.vu, dataSent, nil, time.Now(), float64(n))
+	return n, err
 }

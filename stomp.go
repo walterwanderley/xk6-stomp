@@ -106,7 +106,7 @@ func (c *Client) Connect(opts *Options) *Client {
 		opts.Timeout = defaultTimeout
 	}
 
-	netConn, err := openNetConn(opts)
+	netConn, err := openNetConn(opts, c.vu)
 	if err != nil {
 		common.Throw(rt, err)
 		return nil
@@ -162,7 +162,7 @@ func (c *Client) Connect(opts *Options) *Client {
 	return c
 }
 
-func openNetConn(opts *Options) (io.ReadWriteCloser, error) {
+func openNetConn(opts *Options, vu modules.VU) (io.ReadWriteCloser, error) {
 	timeout, err := time.ParseDuration(opts.Timeout)
 	if err != nil {
 		return nil, err
@@ -177,6 +177,8 @@ func openNetConn(opts *Options) (io.ReadWriteCloser, error) {
 	default:
 		rwc, err = net.DialTimeout(opts.Protocol, opts.Addr, timeout)
 	}
+	rwc = &StatsReadWriteClose{rwc, vu}
+
 	if opts.Verbose {
 		return &VerboseReadWriteClose{rwc}, err
 	}
@@ -197,7 +199,6 @@ func (c *Client) Send(destination, contentType string, body []byte, opts *SendOp
 		if err != nil {
 			reportStats(c.vu, sendMessageErrors, nil, now, 1)
 		} else {
-			reportStats(c.vu, dataSent, nil, now, float64(len(body)))
 			reportStats(c.vu, sendMessage, nil, now, 1)
 		}
 	}()

@@ -6,11 +6,11 @@ import (
 )
 
 type VerboseReadWriteClose struct {
-	rwc io.ReadWriteCloser
+	io.ReadWriteCloser
 }
 
 func (v *VerboseReadWriteClose) Read(p []byte) (int, error) {
-	n, err := v.rwc.Read(p)
+	n, err := v.ReadWriteCloser.Read(p)
 	if err != nil {
 		log.Println("READ-ERR:", err.Error())
 	} else if n > 0 {
@@ -20,15 +20,11 @@ func (v *VerboseReadWriteClose) Read(p []byte) (int, error) {
 }
 
 func (v *VerboseReadWriteClose) Write(p []byte) (int, error) {
-	n, err := v.rwc.Write(p)
+	n, err := v.ReadWriteCloser.Write(p)
 	if err != nil {
 		log.Println("WRITE-ERR:", err.Error())
 	} else if n > 0 {
 		log.Println("WRITE:", string(p[0:n]))
 	}
 	return n, err
-}
-
-func (v *VerboseReadWriteClose) Close() error {
-	return v.rwc.Close()
 }

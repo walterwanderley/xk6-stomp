@@ -97,13 +97,13 @@ default ✓ [======================================] 1 VUs  00m00.0s/10m0s  1/1 
 
      █ teardown
 
-     data_received........: 16 B 375 B/s
-     data_sent............: 16 B 375 B/s
-     iteration_duration...: avg=3.94ms min=1.98ms med=3.94ms max=5.91ms p(90)=5.52ms p(95)=5.72ms
-     iterations...........: 1    23.410925/s
-     stomp_ack_count......: 1    23.410925/s
-     stomp_read_count.....: 1    23.410925/s
-     stomp_read_time......: avg=2.89ms min=2.89ms med=2.89ms max=2.89ms p(90)=2.89ms p(95)=2.89ms
-     stomp_send_count.....: 1    23.410925/s
-     stomp_send_time......: avg=3.6µs  min=3.6µs  med=3.6µs  max=3.6µs  p(90)=3.6µs  p(95)=3.6µs
+     data_received........: 322 B 16 kB/s
+     data_sent............: 251 B 12 kB/s
+     iteration_duration...: avg=5.23ms min=1.12ms med=5.23ms max=9.33ms p(90)=8.51ms p(95)=8.92ms
+     iterations...........: 1     48.05613/s
+     stomp_ack_count......: 1     48.05613/s
+     stomp_read_count.....: 1     48.05613/s
+     stomp_read_time......: avg=6.2ms  min=6.2ms  med=6.2ms  max=6.2ms  p(90)=6.2ms  p(95)=6.2ms 
+     stomp_send_count.....: 1     48.05613/s
+     stomp_send_time......: avg=5.5µs  min=5.5µs  med=5.5µs  max=5.5µs  p(90)=5.5µs  p(95)=5.5µs
 ```

@@ -73,9 +73,6 @@ func (s *Subscription) Read() (msg *Message, err error) {
 		if err != nil {
 			reportStats(s.vu, readMessageErrors, nil, now, 1)
 		} else {
-			if msg != nil {
-				reportStats(s.vu, dataReceived, nil, now, float64(len(msg.Body)))
-			}
 			reportStats(s.vu, readMessage, nil, now, 1)
 		}
 	}()
