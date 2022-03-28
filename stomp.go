@@ -44,6 +44,7 @@ type Options struct {
 	Timeout  string
 	TLS      bool
 	Headers  map[string]string
+	Host     string
 
 	User string
 	Pass string
@@ -55,6 +56,12 @@ type Options struct {
 		Incoming string
 		Outgoing string
 	}
+
+	ReadBufferSize      int
+	ReadChannelCapacity int
+
+	WriteBufferSize      int
+	WriteChannelCapacity int
 
 	Verbose bool
 }
@@ -118,6 +125,9 @@ func (c *Client) Connect(opts *Options) *Client {
 	for k, v := range opts.Headers {
 		connOpts = append(connOpts, stomp.ConnOpt.Header(k, v))
 	}
+	if opts.Host != "" {
+		connOpts = append(connOpts, stomp.ConnOpt.Host(opts.Host))
+	}
 	if opts.MessageSendTimeout != "" {
 		timeout, err := time.ParseDuration(opts.MessageSendTimeout)
 		if err != nil {
@@ -133,6 +143,18 @@ func (c *Client) Connect(opts *Options) *Client {
 			return nil
 		}
 		connOpts = append(connOpts, stomp.ConnOpt.RcvReceiptTimeout(timeout))
+	}
+	if opts.ReadBufferSize > 0 {
+		connOpts = append(connOpts, stomp.ConnOpt.ReadBufferSize(opts.ReadBufferSize))
+	}
+	if opts.ReadChannelCapacity > 0 {
+		connOpts = append(connOpts, stomp.ConnOpt.ReadChannelCapacity(opts.ReadChannelCapacity))
+	}
+	if opts.WriteBufferSize > 0 {
+		connOpts = append(connOpts, stomp.ConnOpt.WriteBufferSize(opts.WriteBufferSize))
+	}
+	if opts.WriteChannelCapacity > 0 {
+		connOpts = append(connOpts, stomp.ConnOpt.WriteChannelCapacity(opts.WriteChannelCapacity))
 	}
 	if opts.Heartbeat.Incoming != "" || opts.Heartbeat.Outgoing != "" {
 		sendTimeout, receiveTimeout := time.Minute, time.Minute

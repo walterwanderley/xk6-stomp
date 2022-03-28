@@ -10,6 +10,7 @@ const client = stomp.connect({
         test: '123',
         other: 'x',
     },
+    host: '/',
     user: 'scott',
     pass: 'tiger',
     heartbeat: {
@@ -18,6 +19,10 @@ const client = stomp.connect({
     },
     message_send_timeout: '5s',
     receipt_timeout: '10s',
+    read_buffer_size: 4096,
+    read_channel_capacity: 20,
+    write_buffer_size: 4096,
+    write_channel_capacity: 20,
     verbose: true
 });
 
