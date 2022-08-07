@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"go.k6.io/k6/metrics"
 	"io"
 	"net"
 	"time"
@@ -13,7 +14,6 @@ import (
 
 	"go.k6.io/k6/js/common"
 	"go.k6.io/k6/js/modules"
-	"go.k6.io/k6/stats"
 )
 
 // Register the extension on module initialization, available to
@@ -217,7 +217,7 @@ func (c *Client) Send(destination, contentType string, body []byte, opts *SendOp
 	startedAt := time.Now()
 	defer func() {
 		now := time.Now()
-		reportStats(c.vu, sendMessageTiming, nil, now, stats.D(now.Sub(startedAt)))
+		reportStats(c.vu, sendMessageTiming, nil, now, metrics.D(now.Sub(startedAt)))
 		if err != nil {
 			reportStats(c.vu, sendMessageErrors, nil, now, 1)
 		} else {

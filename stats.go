@@ -5,39 +5,40 @@ import (
 	"time"
 
 	"go.k6.io/k6/js/modules"
-	"go.k6.io/k6/lib/metrics"
-	"go.k6.io/k6/stats"
+	"go.k6.io/k6/metrics"
 )
 
 var (
-	dataSent     = stats.New(metrics.DataSentName, stats.Counter, stats.Data)
-	dataReceived = stats.New(metrics.DataReceivedName, stats.Counter, stats.Data)
+	registry    = metrics.NewRegistry()
+	dataSent, _ = registry.NewMetric(metrics.DataSentName, metrics.Counter, metrics.Data)
 
-	sendMessage       = stats.New("stomp_send_count", stats.Counter)
-	sendMessageTiming = stats.New("stomp_send_time", stats.Trend, stats.Time)
-	sendMessageErrors = stats.New("stomp_send_error_count", stats.Counter)
+	dataReceived, _ = registry.NewMetric(metrics.DataReceivedName, metrics.Counter, metrics.Data)
 
-	readMessage       = stats.New("stomp_read_count", stats.Counter)
-	readMessageTiming = stats.New("stomp_read_time", stats.Trend, stats.Time)
-	readMessageErrors = stats.New("stomp._read_error_count", stats.Counter)
+	sendMessage, _       = registry.NewMetric("stomp_send_count", metrics.Counter)
+	sendMessageTiming, _ = registry.NewMetric("stomp_send_time", metrics.Trend, metrics.Time)
+	sendMessageErrors, _ = registry.NewMetric("stomp_send_error_count", metrics.Counter)
 
-	ackMessage       = stats.New("stomp_ack_count", stats.Counter)
-	ackMessageErrors = stats.New("stomp_ack_error_count", stats.Counter)
+	readMessage, _       = registry.NewMetric("stomp_read_count", metrics.Counter)
+	readMessageTiming, _ = registry.NewMetric("stomp_read_time", metrics.Trend, metrics.Time)
+	readMessageErrors, _ = registry.NewMetric("stomp._read_error_count", metrics.Counter)
 
-	nackMessage       = stats.New("stomp_nack_count", stats.Counter)
-	nackMessageErrors = stats.New("stomp_nack_error_count", stats.Counter)
+	ackMessage, _       = registry.NewMetric("stomp_ack_count", metrics.Counter)
+	ackMessageErrors, _ = registry.NewMetric("stomp_ack_error_count", metrics.Counter)
+
+	nackMessage, _       = registry.NewMetric("stomp_nack_count", metrics.Counter)
+	nackMessageErrors, _ = registry.NewMetric("stomp_nack_error_count", metrics.Counter)
 )
 
-func reportStats(vu modules.VU, metric *stats.Metric, tags map[string]string, now time.Time, value float64) {
+func reportStats(vu modules.VU, metric *metrics.Metric, tags map[string]string, now time.Time, value float64) {
 	state := vu.State()
 	if state == nil {
 		return
 	}
 
-	stats.PushIfNotDone(vu.Context(), state.Samples, stats.Sample{
+	metrics.PushIfNotDone(vu.Context(), state.Samples, metrics.Sample{
 		Time:   now,
 		Metric: metric,
-		Tags:   stats.IntoSampleTags(&tags),
+		Tags:   metrics.IntoSampleTags(&tags),
 		Value:  value,
 	})
 }

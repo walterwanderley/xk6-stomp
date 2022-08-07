@@ -1,12 +1,12 @@
 package stomp
 
 import (
+	"go.k6.io/k6/metrics"
 	"time"
 
 	"github.com/go-stomp/stomp/v3"
 	"github.com/go-stomp/stomp/v3/frame"
 	"go.k6.io/k6/js/modules"
-	"go.k6.io/k6/stats"
 )
 
 type Transaction struct {
@@ -18,7 +18,7 @@ func (tx *Transaction) Send(destination, contentType string, body []byte, opts *
 	startedAt := time.Now()
 	defer func() {
 		now := time.Now()
-		reportStats(tx.vu, sendMessageTiming, nil, now, stats.D(now.Sub(startedAt)))
+		reportStats(tx.vu, sendMessageTiming, nil, now, metrics.D(now.Sub(startedAt)))
 		if err != nil {
 			reportStats(tx.vu, sendMessageErrors, nil, now, 1)
 		} else {

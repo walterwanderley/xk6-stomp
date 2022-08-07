@@ -1,12 +1,12 @@
 package stomp
 
 import (
+	"go.k6.io/k6/metrics"
 	"time"
 
 	"github.com/go-stomp/stomp/v3"
 	"github.com/go-stomp/stomp/v3/frame"
 	"go.k6.io/k6/js/modules"
-	"go.k6.io/k6/stats"
 )
 
 type Subscription struct {
@@ -69,7 +69,7 @@ func (s *Subscription) Read() (msg *Message, err error) {
 	startedAt := time.Now()
 	defer func() {
 		now := time.Now()
-		reportStats(s.vu, readMessageTiming, nil, now, stats.D(now.Sub(startedAt)))
+		reportStats(s.vu, readMessageTiming, nil, now, metrics.D(now.Sub(startedAt)))
 		if err != nil {
 			reportStats(s.vu, readMessageErrors, nil, now, 1)
 		} else {

@@ -7,7 +7,7 @@ require (
 	github.com/go-stomp/stomp/v3 v3.0.4
 	github.com/gorilla/websocket v1.5.0
 	github.com/tidwall/gjson v1.14.0
-	go.k6.io/k6 v0.37.0
+	go.k6.io/k6 v0.38.3
 )
 
 require (
