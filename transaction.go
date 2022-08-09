@@ -5,25 +5,23 @@ import (
 
 	"github.com/go-stomp/stomp/v3"
 	"github.com/go-stomp/stomp/v3/frame"
-	"go.k6.io/k6/js/modules"
-	"go.k6.io/k6/stats"
+	"go.k6.io/k6/metrics"
 )
 
 type Transaction struct {
 	*stomp.Transaction
-	vu modules.VU
+	client *Client
 }
 
 func (tx *Transaction) Send(destination, contentType string, body []byte, opts *SendOptions) (err error) {
 	startedAt := time.Now()
 	defer func() {
 		now := time.Now()
-		reportStats(tx.vu, sendMessageTiming, nil, now, stats.D(now.Sub(startedAt)))
+		tx.client.reportStats(tx.client.metrics.sendMessageTiming, nil, now, metrics.D(now.Sub(startedAt)))
 		if err != nil {
-			reportStats(tx.vu, sendMessageErrors, nil, now, 1)
+			tx.client.reportStats(tx.client.metrics.sendMessageErrors, nil, now, 1)
 		} else {
-			reportStats(tx.vu, dataSent, nil, now, float64(len(body)))
-			reportStats(tx.vu, sendMessage, nil, now, 1)
+			tx.client.reportStats(tx.client.metrics.sendMessage, nil, now, 1)
 		}
 	}()
 	if opts == nil {
@@ -50,9 +48,9 @@ func (tx *Transaction) Ack(m *Message) error {
 	}
 	err := tx.Transaction.Ack(m.Message)
 	if err != nil {
-		reportStats(tx.vu, ackMessageErrors, nil, now, 1)
+		tx.client.reportStats(tx.client.metrics.ackMessageErrors, nil, now, 1)
 	} else {
-		reportStats(tx.vu, ackMessage, nil, now, 1)
+		tx.client.reportStats(tx.client.metrics.ackMessage, nil, now, 1)
 	}
 	return err
 }
@@ -67,9 +65,9 @@ func (tx *Transaction) Nack(m *Message) error {
 	}
 	err := tx.Transaction.Nack(m.Message)
 	if err != nil {
-		reportStats(tx.vu, nackMessageErrors, nil, now, 1)
+		tx.client.reportStats(tx.client.metrics.nackMessageErrors, nil, now, 1)
 	} else {
-		reportStats(tx.vu, nackMessage, nil, now, 1)
+		tx.client.reportStats(tx.client.metrics.nackMessage, nil, now, 1)
 	}
 	return err
 }

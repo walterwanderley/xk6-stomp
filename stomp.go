@@ -13,7 +13,7 @@ import (
 
 	"go.k6.io/k6/js/common"
 	"go.k6.io/k6/js/modules"
-	"go.k6.io/k6/stats"
+	"go.k6.io/k6/metrics"
 )
 
 // Register the extension on module initialization, available to
@@ -68,8 +68,9 @@ type Options struct {
 
 // Client is the Stomp conn wrapper.
 type Client struct {
-	conn *stomp.Conn
-	vu   modules.VU
+	conn    *stomp.Conn
+	vu      modules.VU
+	metrics stompMetrics
 }
 
 type SendOptions struct {
@@ -92,7 +93,11 @@ func New() *RootModule {
 }
 
 func (*RootModule) NewModuleInstance(vu modules.VU) modules.Instance {
-	return &Stomp{vu: vu, Client: &Client{vu: vu}}
+	m, err := registerMetrics(vu)
+	if err != nil {
+		common.Throw(vu.Runtime(), err)
+	}
+	return &Stomp{vu: vu, Client: &Client{vu: vu, metrics: m}}
 }
 
 func (s *Stomp) Exports() modules.Exports {
@@ -113,7 +118,7 @@ func (c *Client) Connect(opts *Options) *Client {
 		opts.Timeout = defaultTimeout
 	}
 
-	netConn, err := openNetConn(opts, c.vu)
+	netConn, err := openNetConn(opts, c)
 	if err != nil {
 		common.Throw(rt, err)
 		return nil
@@ -184,7 +189,7 @@ func (c *Client) Connect(opts *Options) *Client {
 	return c
 }
 
-func openNetConn(opts *Options, vu modules.VU) (io.ReadWriteCloser, error) {
+func openNetConn(opts *Options, c *Client) (io.ReadWriteCloser, error) {
 	timeout, err := time.ParseDuration(opts.Timeout)
 	if err != nil {
 		return nil, err
@@ -199,7 +204,7 @@ func openNetConn(opts *Options, vu modules.VU) (io.ReadWriteCloser, error) {
 	default:
 		rwc, err = net.DialTimeout(opts.Protocol, opts.Addr, timeout)
 	}
-	rwc = &StatsReadWriteClose{rwc, vu}
+	rwc = &StatsReadWriteClose{rwc, c}
 
 	if opts.Verbose {
 		return &VerboseReadWriteClose{rwc}, err
@@ -217,11 +222,11 @@ func (c *Client) Send(destination, contentType string, body []byte, opts *SendOp
 	startedAt := time.Now()
 	defer func() {
 		now := time.Now()
-		reportStats(c.vu, sendMessageTiming, nil, now, stats.D(now.Sub(startedAt)))
+		c.reportStats(c.metrics.sendMessageTiming, nil, now, metrics.D(now.Sub(startedAt)))
 		if err != nil {
-			reportStats(c.vu, sendMessageErrors, nil, now, 1)
+			c.reportStats(c.metrics.sendMessageErrors, nil, now, 1)
 		} else {
-			reportStats(c.vu, sendMessage, nil, now, 1)
+			c.reportStats(c.metrics.sendMessage, nil, now, 1)
 		}
 	}()
 	if opts == nil {
@@ -266,7 +271,7 @@ func (c *Client) Subscribe(destination string, opts *SubscribeOptions) (*Subscri
 	if err != nil {
 		return nil, err
 	}
-	return NewSubscription(c.vu, sub, opts.Listener), nil
+	return NewSubscription(c, sub, opts.Listener), nil
 }
 
 // Ack acknowledges a message received from the STOMP server.
@@ -280,9 +285,9 @@ func (c *Client) Ack(m *Message) error {
 	}
 	err := c.conn.Ack(m.Message)
 	if err != nil {
-		reportStats(c.vu, ackMessageErrors, nil, now, 1)
+		c.reportStats(c.metrics.ackMessageErrors, nil, now, 1)
 	} else {
-		reportStats(c.vu, ackMessage, nil, now, 1)
+		c.reportStats(c.metrics.ackMessage, nil, now, 1)
 	}
 	return err
 }
@@ -299,9 +304,9 @@ func (c *Client) Nack(m *Message) error {
 	}
 	err := c.conn.Nack(m.Message)
 	if err != nil {
-		reportStats(c.vu, nackMessageErrors, nil, now, 1)
+		c.reportStats(c.metrics.nackMessageErrors, nil, now, 1)
 	} else {
-		reportStats(c.vu, nackMessage, nil, now, 1)
+		c.reportStats(c.metrics.nackMessage, nil, now, 1)
 	}
 	return err
 }
@@ -318,11 +323,25 @@ func (c *Client) Session() string {
 
 // Begin is used to start a transaction.
 func (c *Client) Begin() *Transaction {
-	return &Transaction{Transaction: c.conn.Begin(), vu: c.vu}
+	return &Transaction{Transaction: c.conn.Begin(), client: c}
 }
 
 // BeginWithError is used to start a transaction, but also returns the error.
 func (c *Client) BeginWithError(ctx context.Context) (*Transaction, error) {
 	tx, err := c.conn.BeginWithError()
-	return &Transaction{Transaction: tx, vu: c.vu}, err
+	return &Transaction{Transaction: tx, client: c}, err
+}
+
+func (c *Client) reportStats(metric *metrics.Metric, tags map[string]string, now time.Time, value float64) {
+	state := c.vu.State()
+	if state == nil {
+		return
+	}
+
+	metrics.PushIfNotDone(c.vu.Context(), state.Samples, metrics.Sample{
+		Time:   now,
+		Metric: metric,
+		Tags:   metrics.IntoSampleTags(&tags),
+		Value:  value,
+	})
 }

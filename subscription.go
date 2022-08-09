@@ -5,20 +5,19 @@ import (
 
 	"github.com/go-stomp/stomp/v3"
 	"github.com/go-stomp/stomp/v3/frame"
-	"go.k6.io/k6/js/modules"
-	"go.k6.io/k6/stats"
+	"go.k6.io/k6/metrics"
 )
 
 type Subscription struct {
 	*stomp.Subscription
-	vu       modules.VU
+	client   *Client
 	listener Listener
 	done     chan bool
 }
 
-func NewSubscription(vu modules.VU, sc *stomp.Subscription, listener Listener) *Subscription {
+func NewSubscription(client *Client, sc *stomp.Subscription, listener Listener) *Subscription {
 	s := Subscription{
-		vu:           vu,
+		client:       client,
 		Subscription: sc,
 		listener:     listener,
 		done:         make(chan bool, 1),
@@ -30,7 +29,7 @@ func NewSubscription(vu modules.VU, sc *stomp.Subscription, listener Listener) *
 			}()
 			for {
 				select {
-				case <-vu.Context().Done():
+				case <-client.vu.Context().Done():
 					return
 				case <-s.done:
 					return
@@ -69,11 +68,11 @@ func (s *Subscription) Read() (msg *Message, err error) {
 	startedAt := time.Now()
 	defer func() {
 		now := time.Now()
-		reportStats(s.vu, readMessageTiming, nil, now, stats.D(now.Sub(startedAt)))
+		s.client.reportStats(s.client.metrics.readMessageTiming, nil, now, metrics.D(now.Sub(startedAt)))
 		if err != nil {
-			reportStats(s.vu, readMessageErrors, nil, now, 1)
+			s.client.reportStats(s.client.metrics.readMessageErrors, nil, now, 1)
 		} else {
-			reportStats(s.vu, readMessage, nil, now, 1)
+			s.client.reportStats(s.client.metrics.readMessage, nil, now, 1)
 		}
 	}()
 	var stompMessage *stomp.Message
@@ -81,6 +80,6 @@ func (s *Subscription) Read() (msg *Message, err error) {
 	if err != nil {
 		return nil, err
 	}
-	msg = &Message{Message: stompMessage, vu: s.vu}
+	msg = &Message{Message: stompMessage, vu: s.client.vu}
 	return
 }
