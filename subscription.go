@@ -1,6 +1,7 @@
 package stomp
 
 import (
+	"log"
 	"time"
 
 	"github.com/go-stomp/stomp/v3"
@@ -25,7 +26,10 @@ func NewSubscription(client *Client, sc *stomp.Subscription, listener Listener) 
 	if listener != nil {
 		go func() {
 			defer func() {
-				_ = recover()
+				e := recover()
+				if e != nil {
+					log.Println("Recover FROM:", e)
+				}
 			}()
 			for {
 				select {
