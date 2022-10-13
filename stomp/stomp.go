@@ -16,12 +16,6 @@ import (
 	"go.k6.io/k6/metrics"
 )
 
-// Register the extension on module initialization, available to
-// import from JS as "k6/x/stomp".
-func init() {
-	modules.Register("k6/x/stomp", New())
-}
-
 const (
 	defaultProtocol = "tcp"
 	defaultTimeout  = "10s"
@@ -79,7 +73,7 @@ type SendOptions struct {
 }
 
 // Listener is a callback function to execute when the subscription reads a message
-type Listener func(*Message)
+type Listener func(*Message) error
 
 type SubscribeOptions struct {
 	Ack      string

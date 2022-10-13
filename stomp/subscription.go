@@ -28,29 +28,35 @@ func NewSubscription(client *Client, sc *stomp.Subscription, listener Listener) 
 			defer func() {
 				e := recover()
 				if e != nil {
-					log.Println("Recover FROM:", e)
+					log.Printf("[xk6-stomp] listener %q recover: %v\n", sc.Destination(), e)
 				}
 			}()
 			for {
+				startedAt := time.Now()
 				select {
 				case <-client.vu.Context().Done():
 					return
 				case <-s.done:
 					return
-				default:
+				case stompMessage, ok := <-sc.C:
 					if !s.Active() {
 						return
 					}
-					msg, err := s.Read()
-					if err != nil {
-						return
+					if !ok {
+						continue
 					}
-					select {
-					case <-s.done:
-						return
-					default:
-						listener(msg)
+
+					s.client.reportStats(s.client.metrics.readMessageTiming, nil, time.Now(), metrics.D(time.Now().Sub(startedAt)))
+					if stompMessage.Err != nil {
+						s.client.reportStats(s.client.metrics.readMessageErrors, nil, time.Now(), 1)
+						continue
 					}
+					msg := Message{Message: stompMessage, vu: s.client.vu}
+					if err := listener(&msg); err != nil {
+						log.Printf("[xk6-stomp] listener %q err: %s\n", sc.Destination(), err.Error())
+						s.client.reportStats(s.client.metrics.readMessageErrors, nil, time.Now(), 1)
+					}
+					s.client.reportStats(s.client.metrics.readMessage, nil, time.Now(), 1)
 				}
 			}
 		}()
