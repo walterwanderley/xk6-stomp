@@ -1,6 +1,7 @@
 package stomp
 
 import (
+	"bytes"
 	"log"
 	"time"
 
@@ -28,7 +29,13 @@ func NewSubscription(client *Client, sc *stomp.Subscription, listener Listener) 
 			defer func() {
 				e := recover()
 				if e != nil {
-					log.Printf("[xk6-stomp] listener %q recover: %v\n", sc.Destination(), e)
+					s.client.reportStats(s.client.metrics.readMessageErrors, nil, time.Now(), 1)
+					stack := client.vu.Runtime().CaptureCallStack(0, nil)
+					var buf bytes.Buffer
+					for _, s := range stack {
+						s.Write(&buf)
+					}
+					log.Printf("[xk6-stomp] listener %q recover: %v\n%s\n", sc.Destination(), e, buf.String())
 				}
 			}()
 			for {
@@ -46,15 +53,20 @@ func NewSubscription(client *Client, sc *stomp.Subscription, listener Listener) 
 						continue
 					}
 
-					s.client.reportStats(s.client.metrics.readMessageTiming, nil, time.Now(), metrics.D(time.Now().Sub(startedAt)))
+					s.client.reportStats(s.client.metrics.readMessageTiming, nil, time.Now(), metrics.D(time.Since(startedAt)))
 					if stompMessage.Err != nil {
 						s.client.reportStats(s.client.metrics.readMessageErrors, nil, time.Now(), 1)
 						continue
 					}
 					msg := Message{Message: stompMessage, vu: s.client.vu}
 					if err := listener(&msg); err != nil {
-						log.Printf("[xk6-stomp] listener %q err: %s\n", sc.Destination(), err.Error())
 						s.client.reportStats(s.client.metrics.readMessageErrors, nil, time.Now(), 1)
+						stack := client.vu.Runtime().CaptureCallStack(0, nil)
+						var buf bytes.Buffer
+						for _, s := range stack {
+							s.Write(&buf)
+						}
+						log.Printf("[xk6-stomp] listener %q err: %s\n%s\n", sc.Destination(), err.Error(), buf.String())
 					}
 					s.client.reportStats(s.client.metrics.readMessage, nil, time.Now(), 1)
 				}
