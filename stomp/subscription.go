@@ -1,12 +1,12 @@
 package stomp
 
 import (
-	"bytes"
 	"log"
 	"time"
 
 	"github.com/go-stomp/stomp/v3"
 	"github.com/go-stomp/stomp/v3/frame"
+	"go.k6.io/k6/js/common"
 	"go.k6.io/k6/metrics"
 )
 
@@ -17,7 +17,7 @@ type Subscription struct {
 	done     chan bool
 }
 
-func NewSubscription(client *Client, sc *stomp.Subscription, listener Listener) *Subscription {
+func NewSubscription(client *Client, sc *stomp.Subscription, listener Listener, abortOnFail bool) *Subscription {
 	s := Subscription{
 		client:       client,
 		Subscription: sc,
@@ -30,12 +30,15 @@ func NewSubscription(client *Client, sc *stomp.Subscription, listener Listener) 
 				e := recover()
 				if e != nil {
 					s.client.reportStats(s.client.metrics.readMessageErrors, nil, time.Now(), 1)
-					stack := client.vu.Runtime().CaptureCallStack(0, nil)
-					var buf bytes.Buffer
-					for _, s := range stack {
-						s.Write(&buf)
+					if err, ok := e.(error); ok {
+						err = common.UnwrapGojaInterruptedError(err)
+						log.Printf("[xk6-stomp] listener %q panic err: %v\n", sc.Destination(), err.Error())
+					} else {
+						log.Printf("[xk6-stomp] listener %q panic: %v\n", sc.Destination(), e)
 					}
-					log.Printf("[xk6-stomp] listener %q recover: %v\n%s\n", sc.Destination(), e, buf.String())
+					if abortOnFail {
+						panic(e)
+					}
 				}
 			}()
 			for {
@@ -46,7 +49,7 @@ func NewSubscription(client *Client, sc *stomp.Subscription, listener Listener) 
 				case <-s.done:
 					return
 				case stompMessage, ok := <-sc.C:
-					if !s.Active() {
+					if !s.Active() || s.client.vu.State() == nil {
 						return
 					}
 					if !ok {
@@ -61,12 +64,9 @@ func NewSubscription(client *Client, sc *stomp.Subscription, listener Listener) 
 					msg := Message{Message: stompMessage, vu: s.client.vu}
 					if err := listener(&msg); err != nil {
 						s.client.reportStats(s.client.metrics.readMessageErrors, nil, time.Now(), 1)
-						stack := client.vu.Runtime().CaptureCallStack(0, nil)
-						var buf bytes.Buffer
-						for _, s := range stack {
-							s.Write(&buf)
-						}
-						log.Printf("[xk6-stomp] listener %q err: %s\n%s\n", sc.Destination(), err.Error(), buf.String())
+						gojaErr := common.UnwrapGojaInterruptedError(err)
+						log.Printf("[xk6-stomp] listener %q err: %s\n", sc.Destination(), gojaErr.Error())
+						common.Throw(s.client.vu.Runtime(), gojaErr)
 					}
 					s.client.reportStats(s.client.metrics.readMessage, nil, time.Now(), 1)
 				}

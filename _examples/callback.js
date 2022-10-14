@@ -16,7 +16,8 @@ export default function () {
         listener: function(msg) { 
             console.log('msg', msg.string()); 
             client.ack(msg);
-        }
+        },
+        abort_on_fail: false
     }
     // subscribe to receive messages from 'my/destination' with the client ack mode
     const subscription = client.subscribe('my/destination', subscribeOpts)

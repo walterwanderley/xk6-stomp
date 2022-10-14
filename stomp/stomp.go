@@ -76,10 +76,11 @@ type SendOptions struct {
 type Listener func(*Message) error
 
 type SubscribeOptions struct {
-	Ack      string
-	Headers  map[string]string
-	Id       string
-	Listener Listener
+	Ack         string
+	Headers     map[string]string
+	Id          string
+	Listener    Listener
+	AbortOnFail bool
 }
 
 func New() *RootModule {
@@ -233,7 +234,6 @@ func (c *Client) Send(destination, contentType string, body []byte, opts *SendOp
 	for k, v := range opts.Headers {
 		sendOpts = append(sendOpts, stomp.SendOpt.Header(k, v))
 	}
-
 	err = c.conn.Send(destination, contentType, body, sendOpts...)
 	return
 }
@@ -261,11 +261,12 @@ func (c *Client) Subscribe(destination string, opts *SubscribeOptions) (*Subscri
 	if opts.Id != "" {
 		subOpts = append(subOpts, stomp.SubscribeOpt.Id(opts.Id))
 	}
+
 	sub, err := c.conn.Subscribe(destination, mode, subOpts...)
 	if err != nil {
 		return nil, err
 	}
-	return NewSubscription(c, sub, opts.Listener), nil
+	return NewSubscription(c, sub, opts.Listener, opts.AbortOnFail), nil
 }
 
 // Ack acknowledges a message received from the STOMP server.
