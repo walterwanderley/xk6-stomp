@@ -8,6 +8,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/dop251/goja"
 	"github.com/go-stomp/stomp/v3"
 	"github.com/go-stomp/stomp/v3/frame"
 
@@ -75,11 +76,14 @@ type SendOptions struct {
 // Listener is a callback function to execute when the subscription reads a message
 type Listener func(*Message) error
 
+type ListenerError func(goja.Value) (goja.Value, error)
+
 type SubscribeOptions struct {
 	Ack      string
 	Headers  map[string]string
 	Id       string
 	Listener Listener
+	Error    ListenerError
 }
 
 func New() *RootModule {
@@ -271,7 +275,7 @@ func (c *Client) Subscribe(destination string, opts *SubscribeOptions) (*Subscri
 	if err != nil {
 		common.Throw(c.vu.Runtime(), err)
 	}
-	return NewSubscription(c, sub, opts.Listener), nil
+	return NewSubscription(c, sub, opts.Listener, opts.Error), nil
 }
 
 // Ack acknowledges a message received from the STOMP server.

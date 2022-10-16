@@ -1,9 +1,9 @@
 package stomp
 
 import (
-	"log"
 	"time"
 
+	"github.com/dop251/goja"
 	"github.com/go-stomp/stomp/v3"
 	"github.com/go-stomp/stomp/v3/frame"
 	"go.k6.io/k6/js/common"
@@ -17,7 +17,7 @@ type Subscription struct {
 	done     chan bool
 }
 
-func NewSubscription(client *Client, sc *stomp.Subscription, listener Listener) *Subscription {
+func NewSubscription(client *Client, sc *stomp.Subscription, listener Listener, listenerError ListenerError) *Subscription {
 	s := Subscription{
 		client:       client,
 		Subscription: sc,
@@ -38,20 +38,21 @@ func NewSubscription(client *Client, sc *stomp.Subscription, listener Listener) 
 						return
 					}
 					if !ok || !s.Active() {
-						common.Throw(client.vu.Runtime(), stomp.ErrCompletedSubscription)
+						handleListenerError(client.vu.Runtime(), listenerError, stomp.ErrCompletedSubscription)
+						continue
 					}
 
 					client.reportStats(client.metrics.readMessageTiming, nil, time.Now(), metrics.D(time.Since(startedAt)))
 					if stompMessage.Err != nil {
 						s.client.reportStats(client.metrics.readMessageErrors, nil, time.Now(), 1)
-						common.Throw(s.client.vu.Runtime(), stompMessage.Err)
+						handleListenerError(client.vu.Runtime(), listenerError, stompMessage.Err)
+						continue
 					}
 					msg := Message{Message: stompMessage, vu: s.client.vu}
 					if err := listener(&msg); err != nil {
 						client.reportStats(client.metrics.readMessageErrors, nil, time.Now(), 1)
 						gojaErr := common.UnwrapGojaInterruptedError(err)
-						log.Printf("[xk6-stomp] listener %q err: %s\n", sc.Destination(), gojaErr.Error())
-						common.Throw(client.vu.Runtime(), gojaErr)
+						handleListenerError(client.vu.Runtime(), listenerError, gojaErr)
 					}
 					client.reportStats(client.metrics.readMessage, nil, time.Now(), 1)
 				}
@@ -89,4 +90,16 @@ func (s *Subscription) Read() (msg *Message, err error) {
 	}
 	msg = &Message{Message: stompMessage, vu: s.client.vu}
 	return
+}
+
+func handleListenerError(rt *goja.Runtime, listenerErr ListenerError, err error) {
+	if listenerErr == nil {
+		common.Throw(rt, err)
+	}
+	o := rt.NewObject()
+	if err := o.DefineDataProperty("error", rt.ToValue(err.Error()), goja.FLAG_FALSE, goja.FLAG_FALSE, goja.FLAG_TRUE); err != nil {
+		common.Throw(rt, err)
+	}
+
+	listenerErr(o)
 }

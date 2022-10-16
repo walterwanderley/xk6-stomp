@@ -1,4 +1,4 @@
-import { sleep } from 'k6';
+import { fail, sleep } from 'k6';
 import stomp from 'k6/x/stomp';
 
 // connect to broker
@@ -16,6 +16,9 @@ export default function () {
         listener: function(msg) { 
             console.log('msg', msg.string()); 
             client.ack(msg);
+        },
+        error: function(err) {
+            fail(err.error);
         }
     }
     // subscribe to receive messages from 'my/destination' with the client ack mode
