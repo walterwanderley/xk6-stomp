@@ -17,7 +17,7 @@ type Subscription struct {
 	done     chan bool
 }
 
-func NewSubscription(client *Client, sc *stomp.Subscription, listener Listener, abortOnFail bool) *Subscription {
+func NewSubscription(client *Client, sc *stomp.Subscription, listener Listener) *Subscription {
 	s := Subscription{
 		client:       client,
 		Subscription: sc,
@@ -26,21 +26,6 @@ func NewSubscription(client *Client, sc *stomp.Subscription, listener Listener, 
 	}
 	if listener != nil {
 		go func() {
-			defer func() {
-				e := recover()
-				if e != nil {
-					s.client.reportStats(s.client.metrics.readMessageErrors, nil, time.Now(), 1)
-					if err, ok := e.(error); ok {
-						err = common.UnwrapGojaInterruptedError(err)
-						log.Printf("[xk6-stomp] listener %q panic err: %v\n", sc.Destination(), err.Error())
-					} else {
-						log.Printf("[xk6-stomp] listener %q panic: %v\n", sc.Destination(), e)
-					}
-					if abortOnFail {
-						panic(e)
-					}
-				}
-			}()
 			for {
 				startedAt := time.Now()
 				select {
@@ -49,26 +34,26 @@ func NewSubscription(client *Client, sc *stomp.Subscription, listener Listener, 
 				case <-s.done:
 					return
 				case stompMessage, ok := <-sc.C:
-					if !s.Active() || s.client.vu.State() == nil {
+					if client.vu.State() == nil {
 						return
 					}
-					if !ok {
-						continue
+					if !ok || !s.Active() {
+						common.Throw(client.vu.Runtime(), stomp.ErrCompletedSubscription)
 					}
 
-					s.client.reportStats(s.client.metrics.readMessageTiming, nil, time.Now(), metrics.D(time.Since(startedAt)))
+					client.reportStats(client.metrics.readMessageTiming, nil, time.Now(), metrics.D(time.Since(startedAt)))
 					if stompMessage.Err != nil {
-						s.client.reportStats(s.client.metrics.readMessageErrors, nil, time.Now(), 1)
-						continue
+						s.client.reportStats(client.metrics.readMessageErrors, nil, time.Now(), 1)
+						common.Throw(s.client.vu.Runtime(), stompMessage.Err)
 					}
 					msg := Message{Message: stompMessage, vu: s.client.vu}
 					if err := listener(&msg); err != nil {
-						s.client.reportStats(s.client.metrics.readMessageErrors, nil, time.Now(), 1)
+						client.reportStats(client.metrics.readMessageErrors, nil, time.Now(), 1)
 						gojaErr := common.UnwrapGojaInterruptedError(err)
 						log.Printf("[xk6-stomp] listener %q err: %s\n", sc.Destination(), gojaErr.Error())
-						common.Throw(s.client.vu.Runtime(), gojaErr)
+						common.Throw(client.vu.Runtime(), gojaErr)
 					}
-					s.client.reportStats(s.client.metrics.readMessage, nil, time.Now(), 1)
+					client.reportStats(client.metrics.readMessage, nil, time.Now(), 1)
 				}
 			}
 		}()
@@ -100,7 +85,7 @@ func (s *Subscription) Read() (msg *Message, err error) {
 	var stompMessage *stomp.Message
 	stompMessage, err = s.Subscription.Read()
 	if err != nil {
-		return nil, err
+		common.Throw(s.client.vu.Runtime(), err)
 	}
 	msg = &Message{Message: stompMessage, vu: s.client.vu}
 	return

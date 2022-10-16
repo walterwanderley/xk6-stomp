@@ -25,6 +25,9 @@ func (m *Message) String() string {
 
 func (m *Message) JSON(selector ...string) goja.Value {
 	rt := m.vu.Runtime()
+	if m.vu.State() == nil {
+		common.Throw(rt, fmt.Errorf("invalid VU state"))
+	}
 
 	if m.Body == nil {
 		err := fmt.Errorf("the body is null so we can't transform it to JSON")

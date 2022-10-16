@@ -28,7 +28,7 @@ func openWSConn(opts *Options, timeout time.Duration) (*wsConn, error) {
 		if err == websocket.ErrBadHandshake {
 			b, _ := io.ReadAll(resp.Body)
 			defer resp.Body.Close()
-			log.Println("error: ", resp.StatusCode, string(b))
+			log.Println("[xk6-stomp] error: ", resp.StatusCode, string(b))
 		}
 		return nil, err
 	}
