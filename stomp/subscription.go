@@ -25,41 +25,48 @@ func NewSubscription(client *Client, sc *stomp.Subscription, listener Listener, 
 		done:         make(chan bool, 1),
 	}
 	if listener != nil {
-		go func() {
-			for {
-				startedAt := time.Now()
-				select {
-				case <-client.vu.Context().Done():
-					return
-				case <-s.done:
-					return
-				case stompMessage, ok := <-sc.C:
-					if client.vu.State() == nil {
-						return
-					}
-					if !ok || !s.Active() {
-						handleListenerError(client.vu.Runtime(), listenerError, stomp.ErrCompletedSubscription)
-						continue
-					}
-
-					client.reportStats(client.metrics.readMessageTiming, nil, time.Now(), metrics.D(time.Since(startedAt)))
-					if stompMessage.Err != nil {
-						s.client.reportStats(client.metrics.readMessageErrors, nil, time.Now(), 1)
-						handleListenerError(client.vu.Runtime(), listenerError, stompMessage.Err)
-						continue
-					}
-					msg := Message{Message: stompMessage, vu: s.client.vu}
-					if err := listener(&msg); err != nil {
-						client.reportStats(client.metrics.readMessageErrors, nil, time.Now(), 1)
-						gojaErr := common.UnwrapGojaInterruptedError(err)
-						handleListenerError(client.vu.Runtime(), listenerError, gojaErr)
-					}
-					client.reportStats(client.metrics.readMessage, nil, time.Now(), 1)
-				}
-			}
-		}()
+		go s.handle(listenerError)
 	}
 	return &s
+}
+
+func (s *Subscription) handle(listenerError ListenerError) {
+	for {
+		startedAt := time.Now()
+		select {
+		case <-s.client.ctx.Done():
+			return
+		case <-s.client.vu.Context().Done():
+			return
+		case <-s.done:
+			return
+		case stompMessage, ok := <-s.C:
+			if !ok || !s.Active() {
+				s.handleListenerError(listenerError, stomp.ErrCompletedSubscription)
+				return
+			}
+
+			if s.client == nil || s.client.ctx.Err() != nil || s.client.vu.Context().Err() != nil || s.client.vu.State() == nil || stompMessage.Conn == nil {
+				return
+			}
+
+			s.client.reportStats(s.client.metrics.readMessageTiming, nil, time.Now(), metrics.D(time.Since(startedAt)))
+			if stompMessage.Err != nil {
+				s.client.reportStats(s.client.metrics.readMessageErrors, nil, time.Now(), 1)
+				s.handleListenerError(listenerError, stompMessage.Err)
+				return
+			}
+			msg := Message{Message: stompMessage, vu: s.client.vu}
+			err := s.listener(&msg)
+			if err != nil {
+				s.client.reportStats(s.client.metrics.readMessageErrors, nil, time.Now(), 1)
+				gojaErr := common.UnwrapGojaInterruptedError(err)
+				s.handleListenerError(listenerError, gojaErr)
+			}
+
+			s.client.reportStats(s.client.metrics.readMessage, nil, time.Now(), 1)
+		}
+	}
 }
 
 func (s *Subscription) Unsubscribe(opts ...func(*frame.Frame) error) error {
@@ -92,7 +99,15 @@ func (s *Subscription) Read() (msg *Message, err error) {
 	return
 }
 
-func handleListenerError(rt *goja.Runtime, listenerErr ListenerError, err error) {
+func (s *Subscription) handleListenerError(listenerErr ListenerError, err error) {
+	if s.client == nil || s.client.ctx.Err() != nil || s.client.vu.Context().Err() != nil || s.client.vu.State() == nil {
+		return
+	}
+
+	rt := s.client.vu.Runtime()
+	if rt == nil {
+		return
+	}
 	if listenerErr == nil {
 		common.Throw(rt, err)
 	}

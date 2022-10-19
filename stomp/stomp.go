@@ -3,6 +3,7 @@ package stomp
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -22,13 +23,15 @@ const (
 	defaultTimeout  = "10s"
 )
 
+var ErrNotConnected = errors.New("not connected")
+
 type (
 	RootModule struct{}
 
 	// Stomp is the k6 extension for a Stomp client.
 	Stomp struct {
-		vu modules.VU
-		*Client
+		vu      modules.VU
+		metrics stompMetrics
 	}
 )
 
@@ -63,6 +66,8 @@ type Options struct {
 
 // Client is the Stomp conn wrapper.
 type Client struct {
+	ctx     context.Context
+	cancel  context.CancelFunc
 	conn    *stomp.Conn
 	vu      modules.VU
 	metrics stompMetrics
@@ -95,19 +100,16 @@ func (*RootModule) NewModuleInstance(vu modules.VU) modules.Instance {
 	if err != nil {
 		common.Throw(vu.Runtime(), err)
 	}
-	return &Stomp{vu: vu, Client: &Client{vu: vu, metrics: m}}
+	return &Stomp{vu: vu, metrics: m}
 }
 
 func (s *Stomp) Exports() modules.Exports {
-	return modules.Exports{Default: s.Client}
+	return modules.Exports{Default: s}
 }
 
 // Connect to a stomp server
-func (c *Client) Connect(opts *Options) *Client {
-	rt := c.vu.Runtime()
-	if c.conn != nil {
-		common.Throw(rt, fmt.Errorf("already connected"))
-	}
+func (s *Stomp) Connect(opts *Options) *Client {
+	rt := s.vu.Runtime()
 
 	if opts.Protocol == "" {
 		opts.Protocol = defaultProtocol
@@ -116,7 +118,13 @@ func (c *Client) Connect(opts *Options) *Client {
 		opts.Timeout = defaultTimeout
 	}
 
-	netConn, err := openNetConn(opts, c)
+	client := Client{
+		vu:      s.vu,
+		metrics: s.metrics,
+	}
+	client.ctx, client.cancel = context.WithCancel(s.vu.Context())
+
+	netConn, err := openNetConn(opts, &client)
 	if err != nil {
 		common.Throw(rt, err)
 	}
@@ -173,12 +181,11 @@ func (c *Client) Connect(opts *Options) *Client {
 		connOpts = append(connOpts, stomp.ConnOpt.HeartBeat(sendTimeout, receiveTimeout))
 	}
 
-	c.conn, err = stomp.Connect(netConn, connOpts...)
+	client.conn, err = stomp.Connect(netConn, connOpts...)
 	if err != nil {
 		common.Throw(rt, err)
 	}
-
-	return c
+	return &client
 }
 
 func openNetConn(opts *Options, c *Client) (io.ReadWriteCloser, error) {
@@ -206,7 +213,8 @@ func openNetConn(opts *Options, c *Client) (io.ReadWriteCloser, error) {
 
 // Disconnect will disconnect from the STOMP server.
 func (c *Client) Disconnect() error {
-	if c == nil || c.conn == nil {
+	c.cancel()
+	if c.conn == nil {
 		return nil
 	}
 	return c.conn.Disconnect()
@@ -214,10 +222,13 @@ func (c *Client) Disconnect() error {
 
 // Send sends a message to the STOMP server.
 func (c *Client) Send(destination, contentType string, body []byte, opts *SendOptions) (err error) {
-	if c == nil || c.conn == nil {
-		common.Throw(c.vu.Runtime(), fmt.Errorf("not connected"))
-	}
 	startedAt := time.Now()
+	if c == nil || c.conn == nil {
+		common.Throw(c.vu.Runtime(), ErrNotConnected)
+	}
+	if c.ctx.Err() != nil || c.vu.Context().Err() != nil || c.vu.State() == nil {
+		return nil
+	}
 	defer func() {
 		now := time.Now()
 		c.reportStats(c.metrics.sendMessageTiming, nil, now, metrics.D(now.Sub(startedAt)))
@@ -247,7 +258,10 @@ func (c *Client) Send(destination, contentType string, body []byte, opts *SendOp
 // Subscribe creates a subscription on the STOMP server.
 func (c *Client) Subscribe(destination string, opts *SubscribeOptions) (*Subscription, error) {
 	if c == nil || c.conn == nil {
-		common.Throw(c.vu.Runtime(), fmt.Errorf("not connected"))
+		common.Throw(c.vu.Runtime(), ErrNotConnected)
+	}
+	if c.ctx.Err() != nil || c.vu.Context().Err() != nil || c.vu.State() == nil {
+		return nil, nil
 	}
 	if opts == nil {
 		opts = new(SubscribeOptions)
@@ -280,11 +294,11 @@ func (c *Client) Subscribe(destination string, opts *SubscribeOptions) (*Subscri
 
 // Ack acknowledges a message received from the STOMP server.
 func (c *Client) Ack(m *Message) error {
-	if c == nil || c.conn == nil {
-		common.Throw(c.vu.Runtime(), fmt.Errorf("not connected"))
-	}
 	if m == nil {
-		common.Throw(c.vu.Runtime(), fmt.Errorf("nil message"))
+		return nil
+	}
+	if c == nil || c.conn == nil {
+		common.Throw(c.vu.Runtime(), ErrNotConnected)
 	}
 	now := time.Now()
 	if m.Header.Get(frame.Id) == "" {
@@ -306,11 +320,11 @@ func (c *Client) Ack(m *Message) error {
 // Nack indicates to the server that a message was not received
 // by the client.
 func (c *Client) Nack(m *Message) error {
-	if c == nil || c.conn == nil {
-		common.Throw(c.vu.Runtime(), fmt.Errorf("not connected"))
-	}
 	if m == nil {
-		common.Throw(c.vu.Runtime(), fmt.Errorf("nil message"))
+		return nil
+	}
+	if c == nil || c.conn == nil {
+		common.Throw(c.vu.Runtime(), ErrNotConnected)
 	}
 	now := time.Now()
 	if m.Header.Get(frame.Id) == "" {
@@ -332,7 +346,7 @@ func (c *Client) Nack(m *Message) error {
 // Server returns the STOMP server identification.
 func (c *Client) Server() string {
 	if c == nil || c.conn == nil {
-		common.Throw(c.vu.Runtime(), fmt.Errorf("not connected"))
+		common.Throw(c.vu.Runtime(), ErrNotConnected)
 	}
 	return c.conn.Server()
 }
@@ -340,7 +354,7 @@ func (c *Client) Server() string {
 // Session returns the session identifier.
 func (c *Client) Session() string {
 	if c == nil || c.conn == nil {
-		common.Throw(c.vu.Runtime(), fmt.Errorf("not connected"))
+		common.Throw(c.vu.Runtime(), ErrNotConnected)
 	}
 	return c.conn.Session()
 }
@@ -348,7 +362,7 @@ func (c *Client) Session() string {
 // Begin is used to start a transaction.
 func (c *Client) Begin() *Transaction {
 	if c == nil || c.conn == nil {
-		common.Throw(c.vu.Runtime(), fmt.Errorf("not connected"))
+		common.Throw(c.vu.Runtime(), ErrNotConnected)
 	}
 	return &Transaction{Transaction: c.conn.Begin(), client: c}
 }
@@ -356,7 +370,7 @@ func (c *Client) Begin() *Transaction {
 // BeginWithError is used to start a transaction, but also returns the error.
 func (c *Client) BeginWithError(ctx context.Context) (*Transaction, error) {
 	if c == nil || c.conn == nil {
-		common.Throw(c.vu.Runtime(), fmt.Errorf("not connected"))
+		common.Throw(c.vu.Runtime(), ErrNotConnected)
 	}
 	tx, err := c.conn.BeginWithError()
 	if err != nil {

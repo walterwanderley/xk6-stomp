@@ -35,21 +35,21 @@ func openWSConn(opts *Options, timeout time.Duration) (*wsConn, error) {
 	return &wsConn{conn}, nil
 }
 
-func (ws *wsConn) Read(p []byte) (int, error) {
-	_, m, err := ws.conn.ReadMessage()
+func (w *wsConn) Read(p []byte) (int, error) {
+	_, m, err := w.conn.ReadMessage()
 	if err != nil {
 		return 0, err
 	}
 	return copy(p, m), nil
 }
 
-func (ws *wsConn) Write(p []byte) (int, error) {
-	w, err := ws.conn.NextWriter(websocket.TextMessage)
+func (w *wsConn) Write(p []byte) (int, error) {
+	wr, err := w.conn.NextWriter(websocket.TextMessage)
 	if err != nil {
 		return 0, err
 	}
-	defer w.Close()
-	return w.Write(p)
+	defer wr.Close()
+	return wr.Write(p)
 }
 
 func (w *wsConn) Close() error {
