@@ -12,60 +12,78 @@ import (
 
 type Subscription struct {
 	*stomp.Subscription
-	client   *Client
-	listener Listener
-	done     chan bool
+	client        *Client
+	listener      Listener
+	listenerError ListenerError
+	done          chan bool
 }
 
 func NewSubscription(client *Client, sc *stomp.Subscription, listener Listener, listenerError ListenerError) *Subscription {
 	s := Subscription{
-		client:       client,
-		Subscription: sc,
-		listener:     listener,
-		done:         make(chan bool, 1),
+		client:        client,
+		Subscription:  sc,
+		listener:      listener,
+		listenerError: listenerError,
+		done:          make(chan bool, 1),
 	}
 	if listener != nil {
-		go s.handle(listenerError)
+		runOnLoop := s.client.vu.RegisterCallback()
+		go s.handle(runOnLoop)
 	}
 	return &s
 }
 
-func (s *Subscription) handle(listenerError ListenerError) {
-	for {
-		startedAt := time.Now()
-		select {
-		case <-s.client.ctx.Done():
-			return
-		case <-s.client.vu.Context().Done():
-			return
-		case <-s.done:
-			return
-		case stompMessage, ok := <-s.C:
-			if !ok || !s.Active() {
-				s.handleListenerError(listenerError, stomp.ErrCompletedSubscription)
-				return
-			}
+func (s *Subscription) Continue() error {
+	if s.listener == nil {
+		return nil
+	}
+	if !s.Active() {
+		return stomp.ErrCompletedSubscription
+	}
+	runOnLoop := s.client.vu.RegisterCallback()
+	go s.handle(runOnLoop)
+	return nil
+}
 
-			if s.client == nil || s.client.ctx.Err() != nil || s.client.vu.Context().Err() != nil || s.client.vu.State() == nil || stompMessage.Conn == nil {
-				return
-			}
+func (s *Subscription) handle(runOnLoop func(func() error)) {
+	noop := func() error { return nil }
+	startedAt := time.Now()
+	select {
+	case stompMessage, ok := <-s.C:
+		if !ok || !s.Active() {
+			runOnLoop(s.handleListenerError(stomp.ErrCompletedSubscription))
+			return
+		}
 
-			s.client.reportStats(s.client.metrics.readMessageTiming, nil, time.Now(), metrics.D(time.Since(startedAt)))
-			if stompMessage.Err != nil {
-				s.client.reportStats(s.client.metrics.readMessageErrors, nil, time.Now(), 1)
-				s.handleListenerError(listenerError, stompMessage.Err)
-				return
-			}
-			msg := Message{Message: stompMessage, vu: s.client.vu}
+		if s.client == nil || s.client.ctx.Err() != nil || s.client.vu.Context().Err() != nil || s.client.vu.State() == nil || stompMessage.Conn == nil {
+			runOnLoop(noop)
+			return
+		}
+
+		s.client.reportStats(s.client.metrics.readMessageTiming, nil, time.Now(), metrics.D(time.Since(startedAt)))
+		if stompMessage.Err != nil {
+			s.client.reportStats(s.client.metrics.readMessageErrors, nil, time.Now(), 1)
+			runOnLoop(s.handleListenerError(stompMessage.Err))
+			return
+		}
+		msg := Message{Message: stompMessage, Subscription: s, vu: s.client.vu}
+		runOnLoop(func() error {
 			err := s.listener(&msg)
 			if err != nil {
 				s.client.reportStats(s.client.metrics.readMessageErrors, nil, time.Now(), 1)
-				gojaErr := common.UnwrapGojaInterruptedError(err)
-				s.handleListenerError(listenerError, gojaErr)
 			}
-
-			s.client.reportStats(s.client.metrics.readMessage, nil, time.Now(), 1)
-		}
+			return err
+		})
+		s.client.reportStats(s.client.metrics.readMessage, nil, time.Now(), 1)
+	case <-s.client.ctx.Done():
+		runOnLoop(noop)
+		return
+	case <-s.client.vu.Context().Done():
+		runOnLoop(noop)
+		return
+	case <-s.done:
+		runOnLoop(noop)
+		return
 	}
 }
 
@@ -99,22 +117,25 @@ func (s *Subscription) Read() (msg *Message, err error) {
 	return
 }
 
-func (s *Subscription) handleListenerError(listenerErr ListenerError, err error) {
-	if s.client == nil || s.client.ctx.Err() != nil || s.client.vu.Context().Err() != nil || s.client.vu.State() == nil {
-		return
-	}
+func (s *Subscription) handleListenerError(err error) func() error {
+	return func() error {
+		if s.client == nil || s.client.ctx.Err() != nil || s.client.vu.Context().Err() != nil || s.client.vu.State() == nil {
+			return nil
+		}
 
-	rt := s.client.vu.Runtime()
-	if rt == nil {
-		return
-	}
-	if listenerErr == nil {
-		common.Throw(rt, err)
-	}
-	o := rt.NewObject()
-	if err := o.DefineDataProperty("error", rt.ToValue(err.Error()), goja.FLAG_FALSE, goja.FLAG_FALSE, goja.FLAG_TRUE); err != nil {
-		common.Throw(rt, err)
-	}
+		rt := s.client.vu.Runtime()
+		if rt == nil {
+			return nil
+		}
+		if s.listenerError == nil {
+			common.Throw(rt, err)
+		}
+		o := rt.NewObject()
+		if err := o.DefineDataProperty("error", rt.ToValue(err.Error()), goja.FLAG_FALSE, goja.FLAG_FALSE, goja.FLAG_TRUE); err != nil {
+			common.Throw(rt, err)
+		}
 
-	listenerErr(o)
+		s.listenerError(o)
+		return nil
+	}
 }

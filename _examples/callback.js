@@ -16,13 +16,17 @@ export default function () {
         listener: function(msg) { 
             console.log('msg', msg.string()); 
             client.ack(msg);
+            // continue listening
+            if (msg.subscription.active()) {
+                msg.subscription.continue();
+            }
         },
         error: function(err) {
             fail(err.error);
         }
     }
     // subscribe to receive messages from 'my/destination' with the client ack mode
-    const subscription = client.subscribe('my/destination', subscribeOpts)
+    const subscription = client.subscribe('my/destination', subscribeOpts);
 
     sleep(1);
 

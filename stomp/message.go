@@ -14,6 +14,7 @@ import (
 // Message is a decorator to add string and json methods
 type Message struct {
 	*stomp.Message
+	Subscription  *Subscription
 	vu            modules.VU
 	cachedJSON    interface{}
 	validatedJSON bool
