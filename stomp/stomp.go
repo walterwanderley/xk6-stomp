@@ -381,14 +381,17 @@ func (c *Client) BeginWithError(ctx context.Context) (*Transaction, error) {
 
 func (c *Client) reportStats(metric *metrics.Metric, tags map[string]string, now time.Time, value float64) {
 	state := c.vu.State()
-	if state == nil {
+	ctx := c.vu.Context()
+	if state == nil || ctx == nil {
 		return
 	}
 
-	metrics.PushIfNotDone(c.vu.Context(), state.Samples, metrics.Sample{
-		Time:   now,
-		Metric: metric,
-		Tags:   metrics.IntoSampleTags(&tags),
-		Value:  value,
+	metrics.PushIfNotDone(ctx, state.Samples, metrics.Sample{
+		Time: now,
+		TimeSeries: metrics.TimeSeries{
+			Metric: metric,
+			Tags:   metrics.NewRegistry().RootTagSet().WithTagsFromMap(tags),
+		},
+		Value: value,
 	})
 }
