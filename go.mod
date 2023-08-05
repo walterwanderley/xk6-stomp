@@ -1,13 +1,13 @@
 module github.com/walterwanderley/xk6-stomp
 
-go 1.17
+go 1.19
 
 require (
 	github.com/dop251/goja v0.0.0-20230707174833-636fdf960de1
 	github.com/go-stomp/stomp/v3 v3.0.5
 	github.com/gorilla/websocket v1.5.0
 	github.com/tidwall/gjson v1.14.4
-	go.k6.io/k6 v0.45.0
+	go.k6.io/k6 v0.45.1
 )
 
 require (
