@@ -15,7 +15,7 @@ type wsConn struct {
 }
 
 func openWSConn(opts *Options, timeout time.Duration) (*wsConn, error) {
-	u := url.URL{Scheme: opts.Protocol, Host: opts.Addr, Path: opts.Path}
+	u := url.URL{Scheme: opts.Protocol, Host: opts.Addr, Path: opts.Path, RawQuery: opts.Query}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	headers := make(map[string][]string)

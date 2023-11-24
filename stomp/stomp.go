@@ -39,6 +39,7 @@ type Options struct {
 	Addr     string
 	Protocol string
 	Path     string
+	Query    string
 	Timeout  string
 	TLS      bool
 	Headers  map[string]string
