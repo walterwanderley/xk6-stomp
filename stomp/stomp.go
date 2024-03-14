@@ -63,6 +63,8 @@ type Options struct {
 	WriteChannelCapacity int
 
 	Verbose bool
+	
+	InsecureSkipTLSVerify bool
 }
 
 // Client is the Stomp conn wrapper.

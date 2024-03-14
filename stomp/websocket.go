@@ -2,6 +2,7 @@ package stomp
 
 import (
 	"context"
+	"crypto/tls"
 	"io"
 	"log"
 	"net/url"
@@ -23,6 +24,7 @@ func openWSConn(opts *Options, timeout time.Duration) (*wsConn, error) {
 		headers[k] = []string{v}
 	}
 	dialer := *websocket.DefaultDialer
+	dialer.TLSClientConfig = &tls.Config{InsecureSkipVerify: opts.InsecureSkipTLSVerify}
 	conn, resp, err := dialer.DialContext(ctx, u.String(), headers)
 	if err != nil {
 		if err == websocket.ErrBadHandshake {
