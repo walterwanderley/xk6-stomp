@@ -3,9 +3,9 @@ package stomp
 import (
 	"time"
 
-	"github.com/dop251/goja"
 	"github.com/go-stomp/stomp/v3"
 	"github.com/go-stomp/stomp/v3/frame"
+	"github.com/grafana/sobek"
 	"go.k6.io/k6/js/common"
 	"go.k6.io/k6/metrics"
 )
@@ -131,7 +131,7 @@ func (s *Subscription) handleListenerError(err error) func() error {
 			common.Throw(rt, err)
 		}
 		o := rt.NewObject()
-		if err := o.DefineDataProperty("error", rt.ToValue(err.Error()), goja.FLAG_FALSE, goja.FLAG_FALSE, goja.FLAG_TRUE); err != nil {
+		if err := o.DefineDataProperty("error", rt.ToValue(err.Error()), sobek.FLAG_FALSE, sobek.FLAG_FALSE, sobek.FLAG_TRUE); err != nil {
 			common.Throw(rt, err)
 		}
 

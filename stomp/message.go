@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/dop251/goja"
 	"github.com/go-stomp/stomp/v3"
+	"github.com/grafana/sobek"
 	"github.com/tidwall/gjson"
 	"go.k6.io/k6/js/common"
 	"go.k6.io/k6/js/modules"
@@ -24,7 +24,7 @@ func (m *Message) String() string {
 	return string(m.Body)
 }
 
-func (m *Message) JSON(selector ...string) goja.Value {
+func (m *Message) JSON(selector ...string) sobek.Value {
 	rt := m.vu.Runtime()
 	if m.vu.State() == nil {
 		common.Throw(rt, fmt.Errorf("invalid VU state"))
@@ -47,7 +47,7 @@ func (m *Message) JSON(selector ...string) goja.Value {
 		if hasSelector {
 			if !m.validatedJSON {
 				if !gjson.ValidBytes(body) {
-					return goja.Undefined()
+					return sobek.Undefined()
 				}
 				m.validatedJSON = true
 			}
@@ -55,7 +55,7 @@ func (m *Message) JSON(selector ...string) goja.Value {
 			result := gjson.GetBytes(body, selector[0])
 
 			if !result.Exists() {
-				return goja.Undefined()
+				return sobek.Undefined()
 			}
 			return rt.ToValue(result.Value())
 		}
