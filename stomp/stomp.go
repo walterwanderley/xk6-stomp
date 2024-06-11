@@ -9,9 +9,9 @@ import (
 	"net"
 	"time"
 
-	"github.com/dop251/goja"
 	"github.com/go-stomp/stomp/v3"
 	"github.com/go-stomp/stomp/v3/frame"
+	"github.com/grafana/sobek"
 
 	"go.k6.io/k6/js/common"
 	"go.k6.io/k6/js/modules"
@@ -63,7 +63,7 @@ type Options struct {
 	WriteChannelCapacity int
 
 	Verbose bool
-	
+
 	InsecureSkipTLSVerify bool
 }
 
@@ -84,7 +84,7 @@ type SendOptions struct {
 // Listener is a callback function to execute when the subscription reads a message
 type Listener func(*Message) error
 
-type ListenerError func(goja.Value) (goja.Value, error)
+type ListenerError func(sobek.Value) (sobek.Value, error)
 
 type SubscribeOptions struct {
 	Ack      string
