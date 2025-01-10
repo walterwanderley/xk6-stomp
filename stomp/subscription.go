@@ -60,9 +60,14 @@ func (s *Subscription) handle(runOnLoop func(func() error)) {
 			return
 		}
 
-		s.client.reportStats(s.client.metrics.readMessageTiming, nil, time.Now(), metrics.D(time.Since(startedAt)))
+		tags := map[string]string{}
+		if stompMessage != nil {
+			tags[METRIC_TAG_QUEUE] = stompMessage.Destination
+		}
+
+		s.client.reportStats(s.client.metrics.readMessageTiming, tags, time.Now(), metrics.D(time.Since(startedAt)))
 		if stompMessage.Err != nil {
-			s.client.reportStats(s.client.metrics.readMessageErrors, nil, time.Now(), 1)
+			s.client.reportStats(s.client.metrics.readMessageErrors, tags, time.Now(), 1)
 			runOnLoop(s.handleListenerError(stompMessage.Err))
 			return
 		}
@@ -70,11 +75,11 @@ func (s *Subscription) handle(runOnLoop func(func() error)) {
 		runOnLoop(func() error {
 			err := s.listener(&msg)
 			if err != nil {
-				s.client.reportStats(s.client.metrics.readMessageErrors, nil, time.Now(), 1)
+				s.client.reportStats(s.client.metrics.readMessageErrors, tags, time.Now(), 1)
 			}
 			return err
 		})
-		s.client.reportStats(s.client.metrics.readMessage, nil, time.Now(), 1)
+		s.client.reportStats(s.client.metrics.readMessage, tags, time.Now(), 1)
 	case <-s.client.ctx.Done():
 		runOnLoop(noop)
 		return
@@ -101,11 +106,17 @@ func (s *Subscription) Read() (msg *Message, err error) {
 	startedAt := time.Now()
 	defer func() {
 		now := time.Now()
-		s.client.reportStats(s.client.metrics.readMessageTiming, nil, now, metrics.D(now.Sub(startedAt)))
+
+		tags := map[string]string{}
+		if msg.Message != nil {
+			tags[METRIC_TAG_QUEUE] = msg.Message.Destination
+		}
+
+		s.client.reportStats(s.client.metrics.readMessageTiming, tags, now, metrics.D(now.Sub(startedAt)))
 		if err != nil {
-			s.client.reportStats(s.client.metrics.readMessageErrors, nil, now, 1)
+			s.client.reportStats(s.client.metrics.readMessageErrors, tags, now, 1)
 		} else {
-			s.client.reportStats(s.client.metrics.readMessage, nil, now, 1)
+			s.client.reportStats(s.client.metrics.readMessage, tags, now, 1)
 		}
 	}()
 	var stompMessage *stomp.Message

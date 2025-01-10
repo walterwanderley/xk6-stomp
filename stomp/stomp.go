@@ -234,11 +234,15 @@ func (c *Client) Send(destination, contentType string, body []byte, opts *SendOp
 	}
 	defer func() {
 		now := time.Now()
-		c.reportStats(c.metrics.sendMessageTiming, nil, now, metrics.D(now.Sub(startedAt)))
+
+		tags := map[string]string{}
+		tags[METRIC_TAG_QUEUE] = destination
+		
+		c.reportStats(c.metrics.sendMessageTiming, tags, now, metrics.D(now.Sub(startedAt)))
 		if err != nil {
-			c.reportStats(c.metrics.sendMessageErrors, nil, now, 1)
+			c.reportStats(c.metrics.sendMessageErrors, tags, now, 1)
 		} else {
-			c.reportStats(c.metrics.sendMessage, nil, now, 1)
+			c.reportStats(c.metrics.sendMessage, tags, now, 1)
 		}
 	}()
 	if opts == nil {
@@ -310,12 +314,18 @@ func (c *Client) Ack(m *Message) error {
 	if m.Header.Get(frame.MessageId) == "" {
 		m.Header.Set(frame.MessageId, m.Header.Get(frame.Ack))
 	}
+
+	tags := map[string]string {}
+	if m.Header.Get(frame.Destination) != "" {
+		tags[METRIC_TAG_QUEUE] = m.Header.Get(frame.Destination)
+	}
+
 	err := c.conn.Ack(m.Message)
 	if err != nil {
-		c.reportStats(c.metrics.ackMessageErrors, nil, now, 1)
+		c.reportStats(c.metrics.ackMessageErrors, tags, now, 1)
 		common.Throw(c.vu.Runtime(), err)
 	} else {
-		c.reportStats(c.metrics.ackMessage, nil, now, 1)
+		c.reportStats(c.metrics.ackMessage, tags, now, 1)
 	}
 	return err
 }
@@ -337,11 +347,17 @@ func (c *Client) Nack(m *Message) error {
 		m.Header.Set(frame.MessageId, m.Header.Get(frame.Ack))
 	}
 	err := c.conn.Nack(m.Message)
+
+	tags := map[string]string{}
+	if m.Header.Get(frame.Destination) != "" {
+		tags[METRIC_TAG_QUEUE] = m.Header.Get(frame.Destination)
+	}
+
 	if err != nil {
-		c.reportStats(c.metrics.nackMessageErrors, nil, now, 1)
+		c.reportStats(c.metrics.nackMessageErrors, tags, now, 1)
 		common.Throw(c.vu.Runtime(), err)
 	} else {
-		c.reportStats(c.metrics.nackMessage, nil, now, 1)
+		c.reportStats(c.metrics.nackMessage, tags, now, 1)
 	}
 	return err
 }
@@ -389,11 +405,18 @@ func (c *Client) reportStats(metric *metrics.Metric, tags map[string]string, now
 		return
 	}
 
+	ctm := c.vu.State().Tags.GetCurrentValues()
+	sampleTags := ctm.Tags
+
+	for k, v := range tags {
+		sampleTags = sampleTags.With(k, v)
+	}
+
 	metrics.PushIfNotDone(ctx, state.Samples, metrics.Sample{
 		Time: now,
 		TimeSeries: metrics.TimeSeries{
 			Metric: metric,
-			Tags:   metrics.NewRegistry().RootTagSet().WithTagsFromMap(tags),
+			Tags:   sampleTags,
 		},
 		Value: value,
 	})

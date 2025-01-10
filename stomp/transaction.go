@@ -17,11 +17,16 @@ func (tx *Transaction) Send(destination, contentType string, body []byte, opts *
 	startedAt := time.Now()
 	defer func() {
 		now := time.Now()
-		tx.client.reportStats(tx.client.metrics.sendMessageTiming, nil, now, metrics.D(now.Sub(startedAt)))
+
+		tags := map[string]string{
+			METRIC_TAG_QUEUE: destination,
+		}
+
+		tx.client.reportStats(tx.client.metrics.sendMessageTiming, tags, now, metrics.D(now.Sub(startedAt)))
 		if err != nil {
-			tx.client.reportStats(tx.client.metrics.sendMessageErrors, nil, now, 1)
+			tx.client.reportStats(tx.client.metrics.sendMessageErrors, tags, now, 1)
 		} else {
-			tx.client.reportStats(tx.client.metrics.sendMessage, nil, now, 1)
+			tx.client.reportStats(tx.client.metrics.sendMessage, tags, now, 1)
 		}
 	}()
 	if opts == nil {
@@ -46,11 +51,17 @@ func (tx *Transaction) Ack(m *Message) error {
 	if m.Header.Get(frame.MessageId) == "" {
 		m.Header.Set(frame.MessageId, m.Header.Get(frame.Ack))
 	}
+
+	tags := map[string]string{}
+	if m.Message != nil {
+		tags[METRIC_TAG_QUEUE] = m.Message.Destination
+	}
+
 	err := tx.Transaction.Ack(m.Message)
 	if err != nil {
-		tx.client.reportStats(tx.client.metrics.ackMessageErrors, nil, now, 1)
+		tx.client.reportStats(tx.client.metrics.ackMessageErrors, tags, now, 1)
 	} else {
-		tx.client.reportStats(tx.client.metrics.ackMessage, nil, now, 1)
+		tx.client.reportStats(tx.client.metrics.ackMessage, tags, now, 1)
 	}
 	return err
 }
@@ -63,11 +74,17 @@ func (tx *Transaction) Nack(m *Message) error {
 	if m.Header.Get(frame.MessageId) == "" {
 		m.Header.Set(frame.MessageId, m.Header.Get(frame.Ack))
 	}
+
+	tags := map[string]string{}
+	if m.Message != nil {
+		tags[METRIC_TAG_QUEUE] = m.Message.Destination
+	}
+
 	err := tx.Transaction.Nack(m.Message)
 	if err != nil {
-		tx.client.reportStats(tx.client.metrics.nackMessageErrors, nil, now, 1)
+		tx.client.reportStats(tx.client.metrics.nackMessageErrors, tags, now, 1)
 	} else {
-		tx.client.reportStats(tx.client.metrics.nackMessage, nil, now, 1)
+		tx.client.reportStats(tx.client.metrics.nackMessage, tags, now, 1)
 	}
 	return err
 }
