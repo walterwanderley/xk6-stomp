@@ -61,7 +61,7 @@ func registerMetrics(vu modules.VU) (stompMetrics, error) {
 		return sm, errors.Unwrap(err)
 	}
 
-	if sm.readMessageErrors, err = registry.NewMetric("stomp._read_error_count", metrics.Counter); err != nil {
+	if sm.readMessageErrors, err = registry.NewMetric("stomp_read_error_count", metrics.Counter); err != nil {
 		return sm, errors.Unwrap(err)
 	}
 
