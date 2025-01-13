@@ -237,7 +237,7 @@ func (c *Client) Send(destination, contentType string, body []byte, opts *SendOp
 
 		tags := map[string]string{}
 		tags[METRIC_TAG_QUEUE] = destination
-		
+
 		c.reportStats(c.metrics.sendMessageTiming, tags, now, metrics.D(now.Sub(startedAt)))
 		if err != nil {
 			c.reportStats(c.metrics.sendMessageErrors, tags, now, 1)
@@ -315,7 +315,7 @@ func (c *Client) Ack(m *Message) error {
 		m.Header.Set(frame.MessageId, m.Header.Get(frame.Ack))
 	}
 
-	tags := map[string]string {}
+	tags := map[string]string{}
 	if m.Header.Get(frame.Destination) != "" {
 		tags[METRIC_TAG_QUEUE] = m.Header.Get(frame.Destination)
 	}
